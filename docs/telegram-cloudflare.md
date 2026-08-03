@@ -13,7 +13,7 @@ Architecture :
 
 ## Environnement de test déployé
 
-Le Worker `belloria-assistant` est disponible sur `https://belloria-assistant.belloria-dvitulin.workers.dev`. La migration D1 `0002_telegram_commands.sql` est appliquée et le binding Workers AI est actif. Aucun secret n'est encore configuré : `/health` fonctionne, mais le webhook et le MCP refusent toute requête jusqu'à BELL-017.
+Le Worker `belloria-assistant` est disponible sur `https://belloria-assistant.belloria-dvitulin.workers.dev`. La migration D1 `0002_telegram_commands.sql` est appliquée, le binding Workers AI est actif et le bot privé `@BelloriaAssistantTestBot` est enregistré. Les quatre secrets et le webhook sont configurés depuis BELL-017 ; leurs valeurs restent uniquement dans les stockages protégés locaux et Cloudflare.
 
 ## Secrets
 
@@ -33,6 +33,8 @@ Copier `.dev.vars.example` vers `.dev.vars` et remplacer les quatre valeurs. `.d
 5. Charger les secrets avec `npx wrangler secret bulk .dev.vars`, puis déployer avec `npx wrangler deploy`.
 6. Enregistrer le webhook avec `npm run telegram:webhook -- https://<worker>/webhooks/telegram`.
 7. Envoyer un texte fictif puis un vocal court. Vérifier par MCP que chacun apparaît une seule fois, sans utiliser de donnée client.
+
+Cette procédure a été validée de bout en bout le 2026-08-04 : texte idempotent, deux transcriptions vocales, quarantaine d'un vocal vide, suppression des références audio et nettoyage des commandes terminées.
 
 Le script de préparation ne journalise jamais le jeton, les messages ou les noms de compte. Les commandes Wrangler chiffrent les secrets côté Cloudflare ; leur valeur n'est pas placée dans `wrangler.jsonc`.
 

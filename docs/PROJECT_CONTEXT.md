@@ -61,4 +61,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase de prototypage. BELL-016 remplace le canal WhatsApp par un bot Telegram privé sur le Worker Cloudflare existant, avec D1 pour l'idempotence et Workers AI pour les vocaux. L'activation distante attend uniquement la création du bot de test et la configuration de ses secrets.
+Le projet est en phase de prototypage. Le canal Telegram privé est actif sur le Worker Cloudflare avec D1 pour l'idempotence et Workers AI pour les vocaux. BELL-017 a validé le webhook, les contrôles d'accès, un texte idempotent, la transcription et la quarantaine vocale avec des données fictives ; la prochaine étape est de connecter ce MCP à la tâche ChatGPT Work planifiée.

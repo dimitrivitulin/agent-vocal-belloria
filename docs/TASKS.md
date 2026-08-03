@@ -4,8 +4,6 @@
 
 - [ ] **BELL-016 — Bot Telegram privé sur Cloudflare** (`ready_for_review`)
   Worker, D1, MCP et transcription vocale déployés sans secrets ; tests locaux réussis et endpoint de santé confirmé.
-- [ ] **BELL-017 — Activation du bot Telegram de test** (`pending`)
-  Créer le bot et son identifiant définitif, charger les secrets, enregistrer le webhook puis valider un texte et un vocal fictifs.
 
 ## Voie Meta abandonnée
 
@@ -27,6 +25,8 @@
 
 ## Terminé
 
+- [x] **BELL-017 — Activation du bot Telegram de test**
+  Bot privé activé, secrets et webhook configurés ; texte, idempotence, vocaux, quarantaine et nettoyage validés de bout en bout.
 - [x] **BELL-012 — Adaptateur WhatsApp Cloud API**
   Envoi texte, récupération bornée des médias et normalisation des messages/statuts validés avec des doubles HTTP, sans secret ni appel réel.
 - [x] **BELL-011 — Abstraction de la passerelle WhatsApp**
