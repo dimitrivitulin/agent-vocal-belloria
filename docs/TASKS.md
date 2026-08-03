@@ -2,12 +2,10 @@
 
 ## En cours
 
-Aucun lot actif. Le prochain lot proposé est `BELL-003 — Qualification des emails Gmail`.
+Aucun lot actif. Le prochain lot proposé est `BELL-004 — Passerelle WhatsApp WAHA`.
 
 ## À faire
 
-- [ ] **BELL-003 — Qualification des emails Gmail**
-  Définir les labels, filtres, formats Tally et règles de traitement idempotent.
 - [ ] **BELL-004 — Passerelle WhatsApp WAHA**
   Déployer localement WAHA NOWEB avec stockage persistant et webhooks simulés.
 - [ ] **BELL-005 — Serveur MCP Belloria**
@@ -21,6 +19,8 @@ Aucun lot actif. Le prochain lot proposé est `BELL-003 — Qualification des em
 
 ## Terminé
 
+- [x] **BELL-003 — Qualification des emails Gmail**
+  File de candidats, sources, contrat Tally et reprise idempotente définis.
 - [x] **BELL-002 — Modèle du CRM Notion**
   Deux bases reliées, cycle commercial, normalisation, déduplication et idempotence définis.
 - [x] **BELL-009 — Autonomie Codex sécurisée**
