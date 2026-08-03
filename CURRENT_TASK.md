@@ -1,48 +1,47 @@
-# BELL-004 — Passerelle WhatsApp WAHA
+# BELL-005 — Serveur MCP Belloria
 
 Statut: ready_for_review
-Branche: `codex/bell-004-passerelle-whatsapp-waha`
+Branche: `codex/bell-005-serveur-mcp-belloria`
 Dernière mise à jour: 2026-08-03
 
 ## Objectif
 
-Fournir un prototype local WAHA Core avec moteur NOWEB, stockage persistant et réception vérifiable de webhooks simulés, sans connecter de compte WhatsApp réel.
+Masquer WAHA derrière un serveur MCP authentifié qui n'expose que l'état de session et l'envoi de texte strictement validé.
 
 ## Critères de réussite
 
-- Compose lance WAHA NOWEB avec API uniquement sur la boucle locale et secrets injectés hors Git.
-- Les données de session utilisent un volume persistant distinct des fichiers suivis.
-- Le récepteur local vérifie la signature HMAC et journalise les événements valides.
-- Une simulation déterministe couvre succès, signature absente/invalide et disponibilité.
-- La procédure d'exploitation locale et les limites avant BELL-005 sont documentées.
+- L'entrée MCP exige un jeton Bearer comparé en temps constant.
+- Seuls `whatsapp_session_status` et `whatsapp_send_text` sont publiés.
+- L'URL, la clé et la session WAHA ne sont jamais pilotables par l'appelant.
+- Le téléphone et le texte sont validés avant toute requête WAHA.
+- Les tests n'accèdent ni à WAHA ni à WhatsApp réels.
 
 ## Périmètre
 
-- Configuration Docker Compose et exemple d'environnement.
-- Récepteur de webhooks local minimal et tests automatisés.
-- Guide de démarrage, simulation, arrêt, reprise et sécurité.
-- Aucune connexion WhatsApp, aucun message réel et aucun déploiement cloud.
+- Serveur HTTP JSON-RPC MCP minimal et client WAHA interne.
+- Authentification, schémas d'outils et tests unitaires.
+- Intégration Compose locale et documentation d'exploitation.
+- Aucun compte connecté, envoi réel ou déploiement distant.
 
 ## Fichiers concernés
 
 - `compose.yaml`
 - `.env.example`
 - `.gitignore`
-- `tools/webhook_receiver.py`
-- `tools/simulate_webhook.py`
-- `tests/test_webhook_receiver.py`
-- `docs/waha-local.md`
-- `docs/decisions/004-passerelle-whatsapp-waha.md`
+- `belloria_mcp/server.py`
+- `tests/test_mcp_server.py`
+- `docs/mcp-server.md`
+- `docs/decisions/005-serveur-mcp-belloria.md`
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 
 ## Validations effectuées
 
-- Tests HTTP/HMAC : 4 réussis.
-- Compilation Python : réussie.
-- `git diff --check`, examen du périmètre et recherche de secrets : réussis.
-- Validation Docker Compose : non exécutée, Docker absent de l'environnement.
+- 10 tests HTTP/HMAC/MCP réussis, sans accès à WAHA ou WhatsApp.
+- Compilation Python et `git diff --check` réussis.
+- Examen du périmètre et recherche de secrets réussis (placeholders et clés de test uniquement).
+- Validation Docker Compose non exécutée, Docker absent de l'environnement.
 
 ## Prochaine action
 
-Sur un hôte Docker, exécuter `docker compose --env-file .env.example config --quiet`, démarrer les services et lancer la simulation avant de marquer le lot `completed`.
+Sur un hôte Docker, valider Compose et le démarrage local sans connecter de compte WhatsApp.

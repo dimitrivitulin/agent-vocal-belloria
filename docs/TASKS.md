@@ -2,13 +2,13 @@
 
 ## En cours
 
+- [ ] **BELL-005 — Serveur MCP Belloria** (`ready_for_review`)
+  Deux outils WhatsApp limités derrière une entrée MCP authentifiée.
 - [ ] **BELL-004 — Passerelle WhatsApp WAHA** (`ready_for_review`)
-  Prototype local NOWEB, stockage persistant et webhooks simulés vérifiables.
+  Prototype local validé hors exécution Docker, à confirmer sur un hôte équipé.
 
 ## À faire
 
-- [ ] **BELL-005 — Serveur MCP Belloria**
-  Exposer des outils WhatsApp limités, authentifiés et testés.
 - [ ] **BELL-006 — Synchronisation du CRM Notion**
   Implémenter la recherche, la création et la mise à jour des contacts et opportunités.
 - [ ] **BELL-007 — Automatisation ChatGPT Work**
