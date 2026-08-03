@@ -3,43 +3,9 @@ from __future__ import annotations
 import hmac
 import json
 import os
-import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
-PHONE = re.compile(r"^[1-9][0-9]{7,14}$")
-
-
-class WahaClient:
-    def __init__(self, base_url: str, api_key: str, session: str = "default") -> None:
-        self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
-        self.session = session
-
-    def request(self, method: str, path: str, payload: dict | None = None) -> object:
-        body = None if payload is None else json.dumps(payload).encode()
-        request = Request(
-            f"{self.base_url}{path}", data=body, method=method,
-            headers={"Accept": "application/json", "Content-Type": "application/json", "X-Api-Key": self.api_key},
-        )
-        try:
-            with urlopen(request, timeout=5) as response:
-                return json.loads(response.read() or b"{}")
-        except HTTPError as error:
-            raise RuntimeError(f"WAHA returned HTTP {error.code}") from error
-        except URLError as error:
-            raise RuntimeError("WAHA is unavailable") from error
-
-    def status(self) -> object:
-        return self.request("GET", f"/api/sessions/{self.session}")
-
-    def send_text(self, phone: str, text: str) -> object:
-        if not PHONE.fullmatch(phone):
-            raise ValueError("phone must contain 8 to 15 digits without '+'")
-        if not text or len(text) > 2000:
-            raise ValueError("text must contain 1 to 2000 characters")
-        return self.request("POST", "/api/sendText", {"session": self.session, "chatId": f"{phone}@c.us", "text": text})
+from belloria_mcp.gateway import WhatsAppGateway, gateway_from_env
 
 
 TOOLS = [
@@ -48,7 +14,7 @@ TOOLS = [
 ]
 
 
-def dispatch(message: dict, client: WahaClient) -> dict:
+def dispatch(message: dict, client: WhatsAppGateway) -> dict:
     request_id = message.get("id")
     method = message.get("method")
     try:
@@ -77,7 +43,7 @@ def dispatch(message: dict, client: WahaClient) -> dict:
 
 class McpHandler(BaseHTTPRequestHandler):
     token = ""
-    client: WahaClient
+    client: WhatsAppGateway
 
     def do_GET(self) -> None:
         if self.path == "/health":
@@ -109,7 +75,7 @@ class McpHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     McpHandler.token = os.environ["BELLORIA_MCP_TOKEN"]
-    McpHandler.client = WahaClient(os.getenv("WAHA_BASE_URL", "http://127.0.0.1:3000"), os.environ["WAHA_API_KEY"], os.getenv("WAHA_SESSION", "default"))
+    McpHandler.client = gateway_from_env()
     ThreadingHTTPServer((os.getenv("MCP_HOST", "127.0.0.1"), int(os.getenv("MCP_PORT", "8000"))), McpHandler).serve_forever()
 
 

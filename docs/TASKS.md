@@ -2,13 +2,11 @@
 
 ## Prochaine feature
 
-- [ ] **BELL-011 — Abstraction de la passerelle WhatsApp** (`pending`)
-  Découpler les fonctions Belloria de WAHA derrière une interface de fournisseur, en conservant WAHA comme adaptateur de repli testé mais désactivé.
+- [ ] **BELL-012 — Adaptateur WhatsApp Cloud API** (`pending`)
+  Implémenter l'envoi de texte, la récupération des médias et la normalisation des événements Meta, uniquement avec des doubles et des secrets d'exemple.
 
 ## À faire — migration sans VM
 
-- [ ] **BELL-012 — Adaptateur WhatsApp Cloud API** (`pending`)
-  Implémenter l'envoi de texte, la récupération des médias et la normalisation des événements Meta, uniquement avec des doubles et des secrets d'exemple.
 - [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`pending`)
   Déployer le webhook Meta et les outils MCP authentifiés sur la cible gratuite retenue, avec idempotence, journaux, secrets et restauration documentés.
 - [ ] **BELL-014 — Validation Meta avec numéro de test** (`pending`)
@@ -27,6 +25,8 @@
 
 ## Terminé
 
+- [x] **BELL-011 — Abstraction de la passerelle WhatsApp**
+  Le MCP dépend d'une interface fournisseur neutre ; WAHA reste un adaptateur de repli testé et désactivé sans sélection explicite.
 - [x] **BELL-010 — Architecture WhatsApp sans serveur**
   Cloudflare Workers et D1 retenus pour le webhook/MCP et l'idempotence ; contrat Meta vérifié localement sans compte ni déploiement réel.
 - [x] **BELL-007 — Automatisation ChatGPT Work**
