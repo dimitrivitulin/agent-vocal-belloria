@@ -9,8 +9,6 @@
 
 ## À faire
 
-- [ ] **BELL-006 — Synchronisation du CRM Notion**
-  Implémenter la recherche, la création et la mise à jour des contacts et opportunités.
 - [ ] **BELL-007 — Automatisation ChatGPT Work**
   Créer et tester la tâche cloud de traitement périodique et de compte rendu.
 - [ ] **BELL-008 — Déploiement cloud du prototype**
@@ -18,6 +16,8 @@
 
 ## Terminé
 
+- [x] **BELL-006 — Synchronisation du CRM Notion**
+  Moteur local de rapprochement et d'idempotence validé, sans mutation du CRM réel.
 - [x] **BELL-003 — Qualification des emails Gmail**
   File de candidats, sources, contrat Tally et reprise idempotente définis.
 - [x] **BELL-002 — Modèle du CRM Notion**
