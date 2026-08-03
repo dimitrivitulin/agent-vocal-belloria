@@ -47,6 +47,19 @@ const TOOLS = [
 
 const encoder = new TextEncoder();
 
+function html(body, status = 200, headers = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; base-uri 'none'; frame-ancestors 'none'",
+      "x-content-type-options": "nosniff",
+      ...headers
+    }
+  });
+}
+
 function json(payload, status = 200) {
   return Response.json(payload, { status, headers: { "cache-control": "no-store" } });
 }
@@ -212,12 +225,12 @@ async function sendText(env, text) {
 }
 
 async function mcp(request, env) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer /, "") || "";
-  if (!env.BELLORIA_MCP_TOKEN || !timingSafeEqual(token, env.BELLORIA_MCP_TOKEN)) return json({ error: "unauthorized" }, 401);
   let message;
   try { message = await request.json(); } catch { return json({ error: "invalid request" }, 400); }
   const id = message.id;
   if (message.method === "initialize") return rpcResult(id, { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "belloria-mcp", version: "0.3.0" } });
+  if (message.method === "notifications/initialized" || message.method === "notifications/cancelled") return new Response(null, { status: 202 });
+  if (message.method === "ping") return rpcResult(id, {});
   if (message.method === "tools/list") return rpcResult(id, { tools: TOOLS });
   if (message.method !== "tools/call") return rpcError(id, -32601, "Method not found");
   const { name, arguments: args = {} } = message.params || {};
@@ -248,8 +261,77 @@ export async function handleRequest(request, env, context) {
   const path = new URL(request.url).pathname;
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
-  if (path === "/mcp" && request.method === "POST") return mcp(request, env);
   return json({ error: "not found" }, 404);
 }
 
-export default { fetch: handleRequest };
+function toHex(buffer) {
+  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function csrfSignature(secret, value, search) {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return toHex(await crypto.subtle.sign("HMAC", key, encoder.encode(`${value}|${search}`)));
+}
+
+async function createCsrfToken(secret, search) {
+  const value = `${Date.now()}.${crypto.randomUUID()}`;
+  return `${value}.${await csrfSignature(secret, value, search)}`;
+}
+
+async function validCsrfToken(token, secret, search) {
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [timestamp, nonce, supplied] = parts;
+  const age = Date.now() - Number(timestamp);
+  if (!nonce || !Number.isFinite(age) || age < 0 || age > 600000) return false;
+  const expected = await csrfSignature(secret, `${timestamp}.${nonce}`, search);
+  return timingSafeEqual(supplied, expected);
+}
+
+function authorizePage(csrfToken) {
+  return `<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Autoriser Belloria</title><style>body{font:16px system-ui;max-width:34rem;margin:4rem auto;padding:0 1rem;color:#1f2937}label,input,button{display:block;width:100%;box-sizing:border-box}input,button{font:inherit;padding:.75rem;margin-top:.5rem}button{margin-top:1rem;background:#111827;color:white;border:0;border-radius:.4rem}</style><h1>Autoriser ChatGPT</h1><p>Cette connexion donne accès aux commandes du bot Telegram privé Belloria. Continuez uniquement depuis votre espace ChatGPT Belloria.</p><form method="post"><input type="hidden" name="csrf_token" value="${csrfToken}"><label>Secret d'autorisation<input name="password" type="password" required autocomplete="current-password"></label><button type="submit">Autoriser Belloria</button></form></html>`;
+}
+
+export const oauthDefaultHandler = {
+  async fetch(request, env, context) {
+    const url = new URL(request.url);
+    if (url.pathname !== "/authorize") return handleRequest(request, env, context);
+
+    if (request.method === "GET") {
+      await env.OAUTH_PROVIDER.parseAuthRequest(request);
+      if (!env.BELLORIA_MCP_TOKEN) return json({ error: "unauthorized" }, 401);
+      const csrfToken = await createCsrfToken(env.BELLORIA_MCP_TOKEN, url.search);
+      return html(authorizePage(csrfToken));
+    }
+
+    if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+    const form = await request.formData();
+    const csrfToken = String(form.get("csrf_token") || "");
+    const password = String(form.get("password") || "");
+    if (!env.BELLORIA_MCP_TOKEN || !await validCsrfToken(csrfToken, env.BELLORIA_MCP_TOKEN, url.search)) return json({ error: "unauthorized" }, 401);
+    if (!timingSafeEqual(password, env.BELLORIA_MCP_TOKEN)) return json({ error: "unauthorized" }, 401);
+
+    const oauthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request);
+    const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
+      request: oauthRequest,
+      userId: "belloria-owner",
+      metadata: { channel: "telegram" },
+      scope: ["belloria:mcp"],
+      props: { role: "owner" }
+    });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: redirectTo,
+        "cache-control": "no-store"
+      }
+    });
+  }
+};
+
+export const oauthApiHandler = {
+  async fetch(request, env) {
+    if (new URL(request.url).pathname === "/mcp" && request.method === "POST") return mcp(request, env);
+    return json({ error: "not found" }, 404);
+  }
+};

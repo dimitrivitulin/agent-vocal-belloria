@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "belloria-assistant",
-  "main": "worker/src/index.js",
+  "main": "worker/src/entry.js",
   "compatibility_date": "2026-08-03",
   "d1_databases": [
     {
@@ -12,5 +12,11 @@
     }
   ],
   "ai": { "binding": "AI" },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "cca73f4814794f52b8b04dc743b30f51"
+    }
+  ],
   "observability": { "enabled": true }
 }

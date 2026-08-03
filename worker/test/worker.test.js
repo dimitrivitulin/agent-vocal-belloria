@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import test from "node:test";
-import { extractTelegramCommand, handleRequest } from "../src/index.js";
+import { extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler } from "../src/index.js";
 
 globalThis.crypto ||= webcrypto;
 
@@ -70,7 +70,7 @@ function environment(overrides = {}) {
     TELEGRAM_BOT_TOKEN: "telegram-test-token",
     TELEGRAM_WEBHOOK_SECRET: "webhook-secret",
     TELEGRAM_ALLOWED_CHAT_ID: "123456",
-    BELLORIA_MCP_TOKEN: "mcp-token",
+    BELLORIA_MCP_TOKEN: "oauth-password",
     AI: { run: async () => ({ text: "Transcription de test" }) },
     ...overrides
   };
@@ -82,6 +82,10 @@ function telegramRequest(payload, secret = "webhook-secret") {
     headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": secret },
     body: JSON.stringify(payload)
   });
+}
+
+function callMcp(payload, env) {
+  return oauthApiHandler.fetch(mcpRequest(payload), env);
 }
 
 function textUpdate(overrides = {}) {
@@ -176,35 +180,44 @@ test("quarantines an oversized voice before downloading it", async () => {
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("protects MCP and exposes provider-neutral Belloria tools", async () => {
+test("exposes provider-neutral Belloria tools after OAuth validation", async () => {
   const env = environment();
   const list = { jsonrpc: "2.0", id: 1, method: "tools/list" };
-  assert.equal((await handleRequest(mcpRequest(list, false), env)).status, 401);
-  assert.equal((await handleRequest(mcpRequest(list, false), environment({ BELLORIA_MCP_TOKEN: undefined }))).status, 401);
-  const response = await (await handleRequest(mcpRequest(list), env)).json();
+  assert.equal((await handleRequest(mcpRequest(list), env)).status, 404);
+  const response = await (await callMcp(list, env)).json();
   assert.deepEqual(response.result.tools.map((tool) => tool.name), [
     "belloria_channel_status", "belloria_list_commands", "belloria_complete_command", "belloria_send_text"
   ]);
   assert.equal(JSON.stringify(response).includes("123456"), false);
 
-  const status = await (await handleRequest(mcpRequest(toolCall(2, "belloria_channel_status")), env)).json();
+  const status = await (await callMcp(toolCall(2, "belloria_channel_status"), env)).json();
   assert.deepEqual(JSON.parse(status.result.content[0].text), { provider: "telegram", configured: true, voice_transcription: true });
+});
+
+test("completes the stateless MCP initialization handshake", async () => {
+  const env = environment();
+  const initialized = await callMcp({ jsonrpc: "2.0", method: "notifications/initialized" }, env);
+  assert.equal(initialized.status, 202);
+  assert.equal(await initialized.text(), "");
+
+  const ping = await (await callMcp({ jsonrpc: "2.0", id: 8, method: "ping" }, env)).json();
+  assert.deepEqual(ping, { jsonrpc: "2.0", id: 8, result: {} });
 });
 
 test("lists commands and erases their text only after explicit completion", async () => {
   const env = environment();
   await handleRequest(telegramRequest(textUpdate()), env);
 
-  const listed = await (await handleRequest(mcpRequest(toolCall(3, "belloria_list_commands", { limit: 5 })), env)).json();
+  const listed = await (await callMcp(toolCall(3, "belloria_list_commands", { limit: 5 }), env)).json();
   const commands = JSON.parse(listed.result.content[0].text).commands;
   assert.equal(commands[0].text, "Montre les devis à revoir");
   assert.equal(commands[0].status, "pending");
 
-  const denied = await (await handleRequest(mcpRequest(toolCall(4, "belloria_complete_command", { command_id: "7001", confirmed: false })), env)).json();
+  const denied = await (await callMcp(toolCall(4, "belloria_complete_command", { command_id: "7001", confirmed: false }), env)).json();
   assert.equal(denied.error.message, "explicit confirmation is required");
   assert.equal(env.DB.rows.get("7001").content, "Montre les devis à revoir");
 
-  const completed = await (await handleRequest(mcpRequest(toolCall(5, "belloria_complete_command", { command_id: "7001", confirmed: true })), env)).json();
+  const completed = await (await callMcp(toolCall(5, "belloria_complete_command", { command_id: "7001", confirmed: true }), env)).json();
   assert.deepEqual(JSON.parse(completed.result.content[0].text), { completed: true });
   assert.equal(env.DB.rows.get("7001").content, null);
 });
@@ -218,11 +231,11 @@ test("sends only to the fixed chat and requires exact confirmation", async () =>
   };
   try {
     const env = environment();
-    const denied = await (await handleRequest(mcpRequest(toolCall(6, "belloria_send_text", { text: "Rapport", confirmed: false })), env)).json();
+    const denied = await (await callMcp(toolCall(6, "belloria_send_text", { text: "Rapport", confirmed: false }), env)).json();
     assert.equal(denied.error.message, "explicit confirmation is required");
     assert.equal(payloads.length, 0);
 
-    const sent = await (await handleRequest(mcpRequest(toolCall(7, "belloria_send_text", { text: "Rapport", confirmed: true, chat_id: "attacker" })), env)).json();
+    const sent = await (await callMcp(toolCall(7, "belloria_send_text", { text: "Rapport", confirmed: true, chat_id: "attacker" }), env)).json();
     assert.deepEqual(JSON.parse(sent.result.content[0].text), { sent: true, message_id: 99 });
     assert.equal(payloads.length, 1);
     assert.equal(payloads[0].body.chat_id, "123456");
@@ -234,4 +247,59 @@ test("sends only to the fixed chat and requires exact confirmation", async () =>
 test("reports a minimal health response", async () => {
   const response = await handleRequest(new Request("https://worker.test/health"), environment());
   assert.deepEqual(await response.json(), { status: "ok", channel: "telegram" });
+});
+
+test("serves a hardened OAuth authorization form", async () => {
+  const env = environment({
+    OAUTH_PROVIDER: { parseAuthRequest: async () => ({ clientId: "chatgpt" }) }
+  });
+  const response = await oauthDefaultHandler.fetch(new Request("https://worker.test/authorize?client_id=chatgpt"), env);
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-security-policy"), /form-action 'self' https:\/\/chatgpt\.com/);
+  assert.match(body, /type="password"/);
+  assert.match(body, /name="csrf_token" value="\d+\.[0-9a-f-]+\.[0-9a-f]+"/);
+  assert.equal(body.includes("oauth-password"), false);
+});
+
+test("requires the Belloria password and CSRF token before granting OAuth", async () => {
+  let completed;
+  const env = environment({
+    OAUTH_PROVIDER: {
+      parseAuthRequest: async () => ({ clientId: "chatgpt", scope: ["belloria:commands"] }),
+      completeAuthorization: async (options) => {
+        completed = options;
+        return { redirectTo: "https://chatgpt.com/aip/callback?code=test" };
+      }
+    }
+  });
+  const authorizationUrl = "https://worker.test/authorize?client_id=chatgpt";
+  const formResponse = await oauthDefaultHandler.fetch(new Request(authorizationUrl), env);
+  const formBody = await formResponse.text();
+  const csrfToken = formBody.match(/name="csrf_token" value="([^"]+)"/)[1];
+  const request = new Request(authorizationUrl, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ csrf_token: csrfToken, password: "oauth-password" })
+  });
+  const response = await oauthDefaultHandler.fetch(request, env);
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "https://chatgpt.com/aip/callback?code=test");
+  assert.equal(completed.userId, "belloria-owner");
+  assert.deepEqual(completed.scope, ["belloria:mcp"]);
+  assert.deepEqual(completed.props, { role: "owner" });
+
+  const rejected = new Request(authorizationUrl, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ csrf_token: csrfToken, password: "wrong" })
+  });
+  assert.equal((await oauthDefaultHandler.fetch(rejected, env)).status, 401);
+
+  const tampered = new Request(`${authorizationUrl}&scope=extra`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ csrf_token: csrfToken, password: "oauth-password" })
+  });
+  assert.equal((await oauthDefaultHandler.fetch(tampered, env)).status, 401);
 });

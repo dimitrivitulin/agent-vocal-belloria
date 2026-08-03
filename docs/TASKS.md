@@ -2,6 +2,8 @@
 
 ## À faire — canal Telegram
 
+- [x] **BELL-018 — Connexion MCP à ChatGPT Work** (`completed`)
+  Authentification OAuth MCP, découverte par ChatGPT et premier passage fictif sans mutation Gmail/Notion réelle.
 - [ ] **BELL-016 — Bot Telegram privé sur Cloudflare** (`ready_for_review`)
   Worker, D1, MCP et transcription vocale déployés sans secrets ; tests locaux réussis et endpoint de santé confirmé.
 

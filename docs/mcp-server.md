@@ -2,7 +2,9 @@
 
 ## Surface active sur Cloudflare
 
-Le Worker expose le contrat JSON-RPC sur `POST /mcp`. Chaque requête exige `Authorization: Bearer <BELLORIA_MCP_TOKEN>`. Le canal est fixé côté serveur : aucun outil ne permet à l'appelant de choisir un chat Telegram ou un autre destinataire.
+Le Worker expose le contrat JSON-RPC sur `POST /mcp`. L'accès distant suit OAuth 2.1 pour MCP avec PKCE S256, découverte RFC 8414/RFC 9728 et enregistrement dynamique des clients. Le canal est fixé côté serveur : aucun outil ne permet à l'appelant de choisir un chat Telegram ou un autre destinataire.
+
+Le secret `BELLORIA_MCP_TOKEN` authentifie uniquement le propriétaire sur la page `/authorize`. Il n'est jamais remis à ChatGPT : le Worker émet des jetons OAuth temporaires distincts, dont le stockage technique est géré dans le namespace KV `OAUTH_KV`. Les requêtes directes vers `/mcp` sans jeton OAuth valide sont refusées avant d'atteindre les outils.
 
 Outils exposés :
 
@@ -15,7 +17,16 @@ Le webhook `POST /webhooks/telegram` vérifie `X-Telegram-Bot-Api-Secret-Token`,
 
 ## Configuration
 
-Les secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ALLOWED_CHAT_ID` et `BELLORIA_MCP_TOKEN` sont configurés comme secrets Worker. Ils ne doivent apparaître ni dans `wrangler.jsonc`, ni dans Git, ni dans les journaux. Le binding `AI` et le binding D1 `DB` sont déclarés dans `wrangler.jsonc`.
+Les secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ALLOWED_CHAT_ID` et `BELLORIA_MCP_TOKEN` sont configurés comme secrets Worker. Ils ne doivent apparaître ni dans `wrangler.jsonc`, ni dans Git, ni dans les journaux. Les bindings `AI`, D1 `DB` et KV `OAUTH_KV` sont déclarés dans `wrangler.jsonc`.
+
+## Connexion à ChatGPT
+
+1. Dans ChatGPT web, activer le mode développeur puis créer une application personnalisée.
+2. Utiliser le nom `Belloria`, l'URL `https://belloria-assistant.belloria-dvitulin.workers.dev/mcp` et l'authentification `OAuth`.
+3. Lancer l'analyse des outils, ouvrir le flux d'autorisation et saisir localement la valeur de `BELLORIA_MCP_TOKEN` dans la page Belloria.
+4. Vérifier que les quatre outils attendus sont détectés avant de créer l'application.
+
+Ne jamais choisir `Aucune authentification` ou `Mixte` pour contourner OAuth.
 
 ## Adaptateurs historiques
 

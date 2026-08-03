@@ -1,43 +1,47 @@
-# BELL-017 — Activation du bot Telegram de test
+# BELL-018 — Connexion MCP à ChatGPT Work
 
 Statut: completed
-Branche: `codex/bell-017-activation-bot-telegram`
+Branche: `codex/bell-018-connexion-mcp-chatgpt-work`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Activer le bot Telegram privé de test sur le Worker Cloudflare déployé, puis valider avec des données fictives la réception idempotente d'une commande texte et la transcription d'un vocal.
+Rendre le MCP Telegram déployé compatible avec l'authentification OAuth exigée par les applications personnalisées ChatGPT, puis valider sa découverte et un premier passage fictif sans appel Gmail ou Notion réel.
 
 ## Critères de réussite
 
-- Le bot de test possède un identifiant définitif et n'est utilisé que par le chat privé Belloria autorisé.
-- Les quatre secrets sont chargés dans Cloudflare sans être affichés, journalisés ou ajoutés à Git.
-- Le webhook Telegram est enregistré avec son secret et répond correctement.
-- Un texte fictif apparaît une seule fois dans D1 et peut être lu puis terminé via MCP.
-- Un vocal fictif court est transcrit, apparaît une seule fois et ne laisse aucun fichier audio durable.
-- Les contrôles d'accès refusent un secret de webhook incorrect et protègent le MCP.
-- Le retour arrière par suppression du webhook est vérifié comme immédiatement exploitable.
+- Le Worker expose le flux OAuth 2.1 attendu par MCP avec PKCE et découverte standard.
+- L'autorisation reste limitée au propriétaire Belloria et aucun secret n'est ajouté à Git ou aux journaux.
+- Les routes Telegram existantes, l'idempotence et la transcription restent inchangées.
+- Les outils MCP sont découverts par ChatGPT après authentification.
+- Un passage fictif lit puis termine une commande de test sans envoi Gmail/Notion réel.
+- Les tests, `git diff --check` et l'examen du diff réussissent.
 
 ## Fichiers concernés
 
-- `.dev.vars` (local, exclu de Git)
-- `docs/telegram-cloudflare.md`
+- `worker/src/index.js`
+- `worker/test/worker.test.js`
+- `wrangler.jsonc`
+- `package.json`
+- `.dev.vars.example`
+- `docs/chatgpt-work-automation.md`
+- `docs/mcp-server.md`
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 
 ## Prochaine action
 
-Ouvrir un nouveau lot pour connecter le MCP déployé à la tâche ChatGPT Work et valider un premier passage planifié avec des données fictives.
+Ouvrir le lot suivant pour configurer le passage planifié ChatGPT Work sur les sources Gmail et Notion de test.
 
 ## Résultat
 
-Le bot privé `@BelloriaAssistantTestBot` est actif sur le Worker déployé. Les secrets, le webhook, l'idempotence texte, la transcription vocale, la quarantaine d'un vocal vide et le nettoyage des commandes ont été validés avec des données fictives.
+Le MCP Belloria déployé est connecté à ChatGPT Work par OAuth 2.1 avec PKCE. ChatGPT découvre les quatre actions et a lu puis terminé une commande Telegram fictive, sans envoyer de message Telegram ni contacter Gmail ou Notion.
 
 ## Validations effectuées
 
-- Quatre secrets chargés dans Cloudflare sans valeur ajoutée à Git ; Worker redéployé et webhook enregistré.
-- `/health` répond HTTP 200 ; faux secret webhook et faux jeton MCP refusés en HTTP 401.
-- Texte fictif reçu via MCP ; rejeu du même `update_id` accepté sans nouvelle insertion (`accepted=0`).
-- Deux vocaux fictifs transcrits et un vocal vide mis en quarantaine avec `empty_transcript`.
-- Les trois références de fichiers vocaux sont nulles dans D1 ; aucun audio durable n'est conservé.
-- Les cinq commandes de test ont été terminées ; la file MCP est vide et aucun contenu terminé ne reste stocké.
+- Découverte OAuth, enregistrement dynamique, autorisation, échange de jeton et métadonnées MCP validés sur le Worker déployé.
+- Accès MCP non authentifié refusé ; initialisation, notifications MCP et `tools/list` validés.
+- Les quatre actions Belloria sont visibles dans ChatGPT Work.
+- `belloria_list_commands(limit: 10)` a retourné la commande fictive `602781223` une seule fois.
+- `belloria_complete_command` avec confirmation explicite a retourné `{ "completed": true }`.
+- Aucun message Telegram envoyé et aucun appel Gmail ou Notion réel effectué.

@@ -4,7 +4,11 @@
 
 La tâche cloud s'exécute toutes les quinze minutes, dans le fuseau `Europe/Paris`, avec une seule exécution active. Elle traite au maximum 20 messages candidats par passage, du plus ancien au plus récent. Elle ne lit pas les pièces jointes et n'envoie jamais d'email.
 
-L'activation réelle reste bloquée jusqu'à la configuration des connecteurs Gmail et Notion, à l'exposition sécurisée du MCP Belloria, et à un passage en lecture seule validé sur des messages anonymisés. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
+L'activation réelle reste bloquée jusqu'à la configuration des connecteurs Gmail et Notion, à la connexion OAuth du MCP Belloria dans ChatGPT, et à un passage en lecture seule validé sur des messages anonymisés. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
+
+## Application MCP Belloria
+
+Créer l'application personnalisée avec l'URL `https://belloria-assistant.belloria-dvitulin.workers.dev/mcp` et le mode `OAuth`. Le Worker gère la découverte, PKCE et l'enregistrement dynamique ; la page Belloria demande le secret propriétaire sans le transmettre à ChatGPT. Vérifier la présence exacte des outils `belloria_channel_status`, `belloria_list_commands`, `belloria_complete_command` et `belloria_send_text`.
 
 ## Commandes Telegram
 

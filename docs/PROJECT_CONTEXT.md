@@ -61,4 +61,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase de prototypage. Le canal Telegram privé est actif sur le Worker Cloudflare avec D1 pour l'idempotence et Workers AI pour les vocaux. BELL-017 a validé le webhook, les contrôles d'accès, un texte idempotent, la transcription et la quarantaine vocale avec des données fictives ; la prochaine étape est de connecter ce MCP à la tâche ChatGPT Work planifiée.
+Le projet est en phase de prototypage. Le canal Telegram privé est actif sur le Worker Cloudflare avec D1 pour l'idempotence et Workers AI pour les vocaux. Le MCP déployé est connecté à ChatGPT Work par OAuth 2.1 avec PKCE ; ses quatre actions ont été découvertes et un passage fictif de lecture puis clôture de commande a été validé sans envoi externe. La prochaine étape est de configurer le passage planifié sur les sources Gmail et Notion de test.
