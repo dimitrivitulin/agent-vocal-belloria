@@ -70,7 +70,10 @@ Statuts autorisés : `pending`, `in_progress`, `blocked`, `ready_for_review`, `c
 
 - Ne jamais ajouter de secret réel au dépôt.
 - Utiliser des fichiers d'exemple pour documenter les variables d'environnement.
-- Demander une autorisation avant toute opération irréversible ou sensible : données réelles, production, migration destructive, changement de branche par défaut ou modification majeure d'architecture.
+- Travailler de manière autonome dans le dépôt : lecture, édition, dépendances, tests, Git local et accès réseau ordinaires ne nécessitent pas de confirmation supplémentaire.
+- Regrouper les opérations nécessitant une élévation dans une demande d'approbation unique et précisément délimitée lorsque cela est possible.
+- Demander une autorisation avant toute opération irréversible ou sensible : suppression de données réelles, mise en production, migration destructive, changement de branche par défaut, réécriture Git partagée ou modification majeure d'architecture.
+- Demander une confirmation avant tout envoi externe au nom de Belloria : email, message WhatsApp, invitation, publication ou modification irréversible d'un service distant.
 - Les tests ne doivent pas contacter Gmail, Notion ou WhatsApp réels sans demande explicite.
 
 ## Rituel d'un lot

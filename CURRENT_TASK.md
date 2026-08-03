@@ -1,61 +1,48 @@
-# BELL-001 — Organisation du projet
+# BELL-009 — Autonomie Codex sécurisée
 
 Statut: completed
-Branche: `codex/bell-001-project-organization`
+Branche: `codex/bell-009-autonomie-codex`
 Dernière mise à jour: 2026-08-03
 
 ## Objectif
 
-Mettre en place une organisation de contexte compacte, une feuille de route, des règles Git et un format de décision permettant de reprendre le projet sans charger un historique volumineux.
+Réduire fortement les demandes d'approbation pendant le développement tout en conservant une validation humaine pour les actions externes sensibles ou irréversibles.
 
 ## Point de départ
 
-Le dépôt Git était vide et positionné sur `master`. Aucun fichier projet ni changement utilisateur n'était présent.
-
-## Périmètre du lot
-
-- Ajouter les instructions durables dans `AGENTS.md`.
-- Décrire le contexte stable dans `docs/PROJECT_CONTEXT.md`.
-- Créer la feuille de route dans `docs/TASKS.md`.
-- Installer le modèle de décision dans `docs/decisions/`.
-- Définir la tâche active et la convention de nommage Codex.
-
-Hors périmètre : code applicatif, comptes externes, secrets, infrastructure et déploiement.
+Codex utilisait un workspace protégé avec réseau restreint, ce qui provoquait des approbations répétées pour les opérations ordinaires de développement et Git.
 
 ## Travail terminé
 
-- Branche dédiée créée.
-- Structure documentaire initiale créée.
-- Convention de nommage des tâches Codex et des branches documentée.
-- Contexte stable, feuille de route et première décision d'architecture consignés.
+- Tâche Codex et branche renommées pour le lot BELL-009.
+- Configuration projet Codex ajoutée avec écriture workspace, réseau activé et approbation à la demande.
+- Règles d'autonomie et de confirmation externe ajoutées dans `AGENTS.md`.
 
 ## Prochaine action
 
-Sélectionner le prochain lot avec l'utilisateur. `BELL-002 — Modèle du CRM Notion` est le prochain lot proposé dans la feuille de route.
+Redémarrer ou ouvrir une nouvelle tâche Codex pour charger le nouveau profil, puis reprendre `BELL-002 — Modèle du CRM Notion`.
 
-## Décisions actives
+## Décisions prises
 
-- Séparer contexte stable, feuille de route, mémoire active et décisions durables.
-- Utiliser un identifiant `BELL-xxx` cohérent dans Codex, Git et les documents.
-- Ne pas pousser ou engager de modification sans lot cohérent et autorisation applicable.
+- Ne pas utiliser `danger-full-access` en permanence.
+- Autoriser les opérations ordinaires dans le dépôt et le réseau sans confirmation.
+- Conserver une confirmation pour les communications externes et les actions irréversibles.
 
 ## Fichiers concernés
 
+- `.codex/config.toml`
 - `AGENTS.md`
 - `CURRENT_TASK.md`
-- `docs/PROJECT_CONTEXT.md`
 - `docs/TASKS.md`
-- `docs/decisions/README.md`
-- `docs/decisions/001-architecture-initiale.md`
 
-## Validations
+## Validations effectuées
 
-- Vérification documentaire : réussie ; six fichiers attendus présents.
-- Vérification des espaces et fins de ligne : réussie.
-- Vérification du périmètre : réussie ; uniquement des fichiers d'organisation.
-- Recherche de secrets : réussie ; aucun secret détecté.
+- Syntaxe TOML et valeurs attendues : réussies.
+- `git diff --check` : réussi.
+- Examen du périmètre : réussi ; uniquement configuration et suivi du lot.
+- Recherche de secrets : réussie ; aucun secret ajouté.
 
-## Vigilances
+## Risques ou points de vigilance
 
-- Ne pas transformer les fichiers de contexte en historique chronologique.
-- Ne pas introduire de secret réel dans les prochains lots.
+- La configuration projet n'est chargée que si le dépôt est approuvé comme fiable.
+- La tâche Codex active peut conserver son ancien profil jusqu'à son redémarrage.

@@ -2,7 +2,7 @@
 
 ## En cours
 
-Aucun lot actif. Le prochain lot doit être sélectionné avec l'utilisateur.
+Aucun lot actif. Le prochain lot proposé est `BELL-002 — Modèle du CRM Notion`.
 
 ## À faire
 
@@ -23,5 +23,7 @@ Aucun lot actif. Le prochain lot doit être sélectionné avec l'utilisateur.
 
 ## Terminé
 
+- [x] **BELL-009 — Autonomie Codex sécurisée**
+  Écriture workspace, réseau et recherche web activés avec confirmations sensibles conservées.
 - [x] **BELL-001 — Organisation du projet**
   Règles de travail, mémoire de contexte minimale et suivi des décisions installés.
