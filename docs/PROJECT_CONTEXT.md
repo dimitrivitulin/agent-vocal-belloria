@@ -23,7 +23,7 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 - Notion constitue la source de vérité du CRM métier.
 - Le prototype WAHA Core/NOWEB est conservé comme solution de repli non activée.
 - La cible à valider utilise WhatsApp Cloud API, hébergée par Meta, afin de supprimer la dépendance à une machine persistante.
-- Un webhook et un serveur MCP Belloria sécurisés doivent être adaptés à une exécution serverless gratuite ; la cible définitive sera arrêtée par BELL-010.
+- La cible retenue utilise WhatsApp Cloud API avec Cloudflare Workers pour le webhook et le MCP, et D1 pour l'idempotence et l'état de traitement ; aucun service distant n'est encore déployé.
 
 Cette architecture reste susceptible d'évoluer après validation du prototype. Les décisions durables sont consignées dans `docs/decisions/`.
 
@@ -59,4 +59,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase d'organisation et de conception. La voie VM/WAHA a été préparée localement puis gelée. Aucun service, compte réel, secret ou déploiement de production n'est configuré dans le dépôt ; BELL-010 doit valider la cible sans VM.
+Le projet est en phase de prototypage. La voie VM/WAHA a été préparée localement puis gelée. L'architecture serverless Cloudflare/Meta a été validée par contrat local, sans compte réel, secret ou déploiement ; BELL-011 doit maintenant découpler la passerelle WhatsApp.

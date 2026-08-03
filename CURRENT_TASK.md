@@ -1,56 +1,48 @@
-# BELL-008 — Déploiement cloud du prototype
+# BELL-010 — Architecture WhatsApp sans serveur
 
-Statut: ready_for_review
-Branche: `codex/bell-008-deploiement-cloud-prototype`
+Statut: completed
+Branche: `codex/bell-010-architecture-whatsapp-serverless`
 Dernière mise à jour: 2026-08-03
 
 ## Objectif
 
-Préparer un déploiement reproductible et sécurisé de WAHA et du MCP Belloria sur une VM persistante, sans activer de service réel.
+Valider par un prototype local minimal que WhatsApp Cloud API et un hébergement serverless peuvent remplacer WAHA, puis figer les contrats, le stockage et la cible d’hébergement.
 
 ## Critères de réussite
 
-- Seuls HTTP/HTTPS sont exposés par le proxy ; WAHA et les services internes restent privés.
-- TLS, persistance, secrets et image WAHA versionnée sont configurés.
-- Un contrôle local rejette les secrets d'exemple et les tags WAHA flottants.
-- Le runbook couvre installation, vérification, sauvegarde et reprise.
-- Aucun déploiement distant ni compte WhatsApp réel n'est activé.
+- Le contrat webhook Meta couvre le challenge GET et la signature HMAC SHA-256 du corps brut.
+- Un événement synthétique permet de démontrer l’identifiant d’idempotence sans compte Meta réel.
+- La cible serverless et son stockage sont comparés à une alternative et consignés dans une décision.
+- Les limites, secrets, reprise et responsabilités des lots suivants sont explicites.
+- Aucun compte, numéro, message ou service distant réel n’est activé.
 
 ## Périmètre
 
-- Configuration Docker Compose cloud et proxy TLS.
-- Image reproductible du serveur MCP et volumes persistants.
-- Validation de configuration et documentation opératoire.
-- Aucun changement OCI, DNS ou WhatsApp réel sans confirmation.
+- Cœur Python sans dépendance pour vérifier et extraire les événements Meta synthétiques.
+- Tests unitaires du contrat et documentation d’architecture.
+- Choix de la cible d’hébergement, sans déploiement.
+- Aucun adaptateur d’envoi complet, média réel, webhook public ou configuration Meta.
 
 ## Fichiers concernés
 
-- `compose.cloud.yaml`
-- `Dockerfile.mcp`
-- `deploy/Caddyfile`
-- `.env.cloud.example`
-- `tools/check_cloud_config.py`
-- `tests/test_cloud_config.py`
-- `docs/cloud-deployment.md`
+- `belloria_cloud/__init__.py`
+- `belloria_cloud/webhook.py`
+- `tests/test_meta_webhook.py`
+- `docs/whatsapp-serverless.md`
+- `docs/decisions/006-architecture-whatsapp-serverless.md`
+- `docs/PROJECT_CONTEXT.md`
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 
 ## Prochaine action
 
-Démarrer une nouvelle tâche Codex **BELL-010 — Architecture WhatsApp sans serveur**.
-Ne pas créer de VM ni activer WAHA : la voie Docker reste une solution de repli.
+Démarrer **BELL-011 — Abstraction de la passerelle WhatsApp** sans modifier encore le protocole MCP public.
 
-## Décision de sortie
+## Résultat
 
-- Oracle Always Free est indisponible dans la région testée faute de capacité.
-- Le compte Hostinger existant ne contient aucun VPS ; un VPS serait payant.
-- L'architecture cible à évaluer remplace WAHA par WhatsApp Cloud API hébergée par Meta et exécute le webhook/MCP sur un service serverless gratuit.
-- Aucun compte WhatsApp réel ni service distant n'a été activé.
+Cloudflare Workers avec D1 est retenu ; le contrat Meta minimal est couvert par quatre tests synthétiques. Aucun compte, numéro, message ou service distant n'a été activé.
 
 ## Validations effectuées
 
-- 29 tests unitaires réussis, dont 4 contrôles de configuration cloud.
-- Compilation Python et `git diff --check` réussis.
-- Le fichier d'exemple est correctement rejeté tant que ses secrets ne sont pas remplacés.
-- La clé API WAHA exige 64 caractères alphanumériques et l'image est figée sur `2026.7.1`.
-- Rendu Docker Compose différé : aucun moteur Docker n'est installé sur ce poste.
+- 33 tests unitaires réussis, dont 4 dédiés au webhook Meta.
+- Challenge, signature SHA-256 sur corps brut et clés d'idempotence validés.

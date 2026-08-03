@@ -2,13 +2,11 @@
 
 ## Prochaine feature
 
-- [ ] **BELL-010 — Architecture WhatsApp sans serveur** (`pending`)
-  Valider par un prototype minimal que Meta Cloud API et un hébergement serverless peuvent remplacer WAHA, puis figer les contrats, le stockage et la cible d'hébergement dans une décision d'architecture.
+- [ ] **BELL-011 — Abstraction de la passerelle WhatsApp** (`pending`)
+  Découpler les fonctions Belloria de WAHA derrière une interface de fournisseur, en conservant WAHA comme adaptateur de repli testé mais désactivé.
 
 ## À faire — migration sans VM
 
-- [ ] **BELL-011 — Abstraction de la passerelle WhatsApp** (`pending`)
-  Découpler les fonctions Belloria de WAHA derrière une interface de fournisseur, en conservant WAHA comme adaptateur de repli testé mais désactivé.
 - [ ] **BELL-012 — Adaptateur WhatsApp Cloud API** (`pending`)
   Implémenter l'envoi de texte, la récupération des médias et la normalisation des événements Meta, uniquement avec des doubles et des secrets d'exemple.
 - [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`pending`)
@@ -29,6 +27,8 @@
 
 ## Terminé
 
+- [x] **BELL-010 — Architecture WhatsApp sans serveur**
+  Cloudflare Workers et D1 retenus pour le webhook/MCP et l'idempotence ; contrat Meta vérifié localement sans compte ni déploiement réel.
 - [x] **BELL-007 — Automatisation ChatGPT Work**
   Passage périodique testé localement et compte rendu soumis à confirmation.
 - [x] **BELL-006 — Synchronisation du CRM Notion**
