@@ -1,6 +1,6 @@
 # BELL-008 — Déploiement cloud du prototype
 
-Statut: completed
+Statut: ready_for_review
 Branche: `codex/bell-008-deploiement-cloud-prototype`
 Dernière mise à jour: 2026-08-03
 
@@ -37,7 +37,15 @@ Préparer un déploiement reproductible et sécurisé de WAHA et du MCP Belloria
 
 ## Prochaine action
 
-Créer la VM et valider le déploiement avec un numéro de test après confirmation explicite.
+Démarrer une nouvelle tâche Codex **BELL-010 — Architecture WhatsApp sans serveur**.
+Ne pas créer de VM ni activer WAHA : la voie Docker reste une solution de repli.
+
+## Décision de sortie
+
+- Oracle Always Free est indisponible dans la région testée faute de capacité.
+- Le compte Hostinger existant ne contient aucun VPS ; un VPS serait payant.
+- L'architecture cible à évaluer remplace WAHA par WhatsApp Cloud API hébergée par Meta et exécute le webhook/MCP sur un service serverless gratuit.
+- Aucun compte WhatsApp réel ni service distant n'a été activé.
 
 ## Validations effectuées
 

@@ -1,16 +1,34 @@
 # Feuille de route Belloria
 
-## En cours
+## Prochaine feature
 
+- [ ] **BELL-010 — Architecture WhatsApp sans serveur** (`pending`)
+  Valider par un prototype minimal que Meta Cloud API et un hébergement serverless peuvent remplacer WAHA, puis figer les contrats, le stockage et la cible d'hébergement dans une décision d'architecture.
+
+## À faire — migration sans VM
+
+- [ ] **BELL-011 — Abstraction de la passerelle WhatsApp** (`pending`)
+  Découpler les fonctions Belloria de WAHA derrière une interface de fournisseur, en conservant WAHA comme adaptateur de repli testé mais désactivé.
+- [ ] **BELL-012 — Adaptateur WhatsApp Cloud API** (`pending`)
+  Implémenter l'envoi de texte, la récupération des médias et la normalisation des événements Meta, uniquement avec des doubles et des secrets d'exemple.
+- [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`pending`)
+  Déployer le webhook Meta et les outils MCP authentifiés sur la cible gratuite retenue, avec idempotence, journaux, secrets et restauration documentés.
+- [ ] **BELL-014 — Validation Meta avec numéro de test** (`pending`)
+  Configurer l'application Meta de test, valider texte et vocal de bout en bout et vérifier qu'aucun numéro Belloria réel ni message client n'est utilisé.
+- [ ] **BELL-015 — Préparation du passage en production WhatsApp** (`pending`)
+  Documenter la vérification Meta, le numéro cible, les modèles, les coûts, le consentement et le retour arrière, sans migrer le numéro avant confirmation.
+
+## Voie historique gelée
+
+- [ ] **BELL-008 — Déploiement cloud du prototype** (`ready_for_review`)
+  Configuration VM/Docker validée localement et conservée comme solution de repli ; déploiement distant suspendu au profit de BELL-010.
 - [ ] **BELL-005 — Serveur MCP Belloria** (`ready_for_review`)
-  Deux outils WhatsApp limités derrière une entrée MCP authentifiée.
+  Deux outils WhatsApp limités derrière une entrée MCP authentifiée, à adapter à l'exécution serverless dans BELL-013.
 - [ ] **BELL-004 — Passerelle WhatsApp WAHA** (`ready_for_review`)
-  Prototype local validé hors exécution Docker, à confirmer sur un hôte équipé.
+  Prototype local conservé comme adaptateur de repli ; aucune activation prévue.
 
 ## Terminé
 
-- [x] **BELL-008 — Déploiement cloud du prototype**
-  Configuration sécurisée et runbook validés localement, sans activation distante.
 - [x] **BELL-007 — Automatisation ChatGPT Work**
   Passage périodique testé localement et compte rendu soumis à confirmation.
 - [x] **BELL-006 — Synchronisation du CRM Notion**

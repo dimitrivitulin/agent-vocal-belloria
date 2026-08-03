@@ -21,9 +21,9 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 - Gmail applique des filtres et labels aux messages candidats.
 - Une tâche ChatGPT Work cloud consulte périodiquement les éléments à traiter.
 - Notion constitue la source de vérité du CRM métier.
-- WAHA Core, avec le moteur NOWEB, fournit une connexion WhatsApp Web non officielle.
-- Un serveur MCP Belloria sécurisé masque WAHA et n'expose que des actions limitées à ChatGPT Work.
-- Une petite machine cloud persistante héberge WAHA et le MCP ; Oracle Cloud Always Free est le candidat actuel pour le prototype.
+- Le prototype WAHA Core/NOWEB est conservé comme solution de repli non activée.
+- La cible à valider utilise WhatsApp Cloud API, hébergée par Meta, afin de supprimer la dépendance à une machine persistante.
+- Un webhook et un serveur MCP Belloria sécurisés doivent être adaptés à une exécution serverless gratuite ; la cible définitive sera arrêtée par BELL-010.
 
 Cette architecture reste susceptible d'évoluer après validation du prototype. Les décisions durables sont consignées dans `docs/decisions/`.
 
@@ -41,10 +41,11 @@ Cette architecture reste susceptible d'évoluer après validation du prototype. 
 
 - Le moteur doit être proportionné à un faible volume et éviter les services d'orchestration payants.
 - ChatGPT Work fonctionne par tâche planifiée et ne reçoit pas directement un webhook Gmail ou WhatsApp.
-- Une connexion WhatsApp Web non officielle peut être déconnectée ou restreinte par WhatsApp.
+- La Cloud API impose les règles Meta Business, les fenêtres de service et une tarification susceptible d'évoluer ; aucun coût nul permanent ne doit être promis.
+- La solution WAHA de repli peut être déconnectée ou restreinte par WhatsApp.
 - Le numéro principal Belloria ne doit pas être utilisé pendant les premiers tests.
 - WAHA ne doit jamais être exposé directement à Internet.
-- Les sessions WhatsApp sont des secrets critiques et doivent utiliser un stockage persistant protégé.
+- Les jetons Meta, secrets de webhook et éventuelles sessions WAHA de repli sont des secrets critiques et doivent utiliser un stockage protégé.
 - Aucun email client ne doit être envoyé automatiquement au début du projet.
 
 ## Sources de demandes observées
@@ -58,4 +59,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase d'organisation et de conception. Aucun service, compte réel, secret ou déploiement de production n'est encore configuré dans le dépôt.
+Le projet est en phase d'organisation et de conception. La voie VM/WAHA a été préparée localement puis gelée. Aucun service, compte réel, secret ou déploiement de production n'est configuré dans le dépôt ; BELL-010 doit valider la cible sans VM.
