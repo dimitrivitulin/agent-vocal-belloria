@@ -4,7 +4,13 @@
 
 La tâche cloud s'exécute toutes les quinze minutes, dans le fuseau `Europe/Paris`, avec une seule exécution active. Elle traite au maximum 20 messages candidats par passage, du plus ancien au plus récent. Elle ne lit pas les pièces jointes et n'envoie jamais d'email.
 
-L'activation réelle reste bloquée jusqu'à la configuration des connecteurs Gmail et Notion, à l'exposition sécurisée du MCP Belloria, et à un passage en lecture seule validé sur des messages anonymisés. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
+L'activation réelle reste bloquée jusqu'à la configuration des connecteurs Gmail et Notion, à l'exposition sécurisée du MCP Belloria, et à un passage en lecture seule validé sur des messages anonymisés. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
+
+## Commandes Telegram
+
+Au début de chaque passage, appeler `belloria_list_commands` avec une limite de 10. Pour `status=pending`, le champ `text` contient soit le message saisi, soit la transcription du vocal. Pour `status=quarantined`, ne rien exécuter : signaler seulement le code d'erreur assaini. Une commande de consultation peut être exécutée dans le périmètre Gmail/Notion déjà autorisé. Une mutation, un envoi d'email ou une action irréversible exige toujours une confirmation explicite portant sur son contenu exact.
+
+Après traitement réussi ou décision explicite de ne pas agir, appeler `belloria_complete_command` avec l'identifiant reçu et `confirmed: true` ; le Worker efface alors le texte conservé dans D1. En cas d'erreur technique, laisser la commande en attente pour la reprise suivante.
 
 ## Instruction de la tâche
 
@@ -16,7 +22,7 @@ L'activation réelle reste bloquée jusqu'à la configuration des connecteurs Gm
 6. Pour une demande ou une réponse commerciale, appeler la synchronisation CRM. Appliquer `Traite` seulement après son succès. Un résultat rejoué répare simplement le label Gmail.
 7. Sur erreur technique, appliquer `Erreur`, conserver le message non traité côté CRM et poursuivre avec le candidat suivant.
 8. Produire un rapport comptant les messages traités, à revoir et en erreur, sans données personnelles inutiles.
-9. Préparer le rapport comme brouillon WhatsApp. Afficher le texte exact et demander une confirmation humaine avant d'appeler `whatsapp_send_text` avec `confirmed: true`.
+9. Préparer le rapport comme brouillon Telegram. Afficher le texte exact et demander une confirmation humaine avant d'appeler `belloria_send_text` avec `confirmed: true`.
 
 ## Sortie attendue
 
@@ -28,7 +34,7 @@ Erreurs : <nombre>
 - <messageId>: <motif seulement pour revue ou erreur>
 ```
 
-Si aucun candidat n'est présent, la tâche termine sans notification. Les journaux ne doivent contenir ni corps complet d'email, ni jeton, ni clé WAHA, ni numéro WhatsApp.
+Si aucun candidat et aucune commande ne sont présents, la tâche termine sans notification. Les journaux ne doivent contenir ni corps complet d'email, ni jeton Telegram, ni identifiant de chat, ni texte de commande.
 
 ## Validation avant activation
 
@@ -36,4 +42,5 @@ Si aucun candidat n'est présent, la tâche termine sans notification. Les journ
 - Tester les scénarios de `docs/gmail-qualification.md` sur une boîte de test.
 - Vérifier l'idempotence après succès CRM suivi d'un échec de label Gmail.
 - Vérifier l'expiration du verrou et la limite de tentatives.
+- Vérifier qu'une commande Telegram texte et la transcription d'un vocal sont traitées une seule fois.
 - Confirmer le destinataire et chaque texte de compte rendu avant envoi.

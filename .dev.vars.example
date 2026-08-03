@@ -1,9 +1,4 @@
-META_VERIFY_TOKEN=change-me-use-a-long-random-value
-META_APP_SECRET=change-me-use-a-long-random-value
-META_ACCESS_TOKEN=change-me-use-a-system-user-token
-META_PHONE_NUMBER_ID=change-me
-META_GRAPH_VERSION=change-me-to-a-supported-version
-BELLORIA_MCP_TOKEN=change-me-use-a-long-random-value
-# Facultatif : destination asynchrone recevant uniquement les identifiants minimisés.
-EVENT_PROCESSOR_URL=
-EVENT_PROCESSOR_TOKEN=
+TELEGRAM_BOT_TOKEN=change-me-use-the-token-issued-by-botfather
+TELEGRAM_WEBHOOK_SECRET=change-me-use-a-long-random-value
+TELEGRAM_ALLOWED_CHAT_ID=change-me-use-the-private-belloria-chat-id
+BELLORIA_MCP_TOKEN=change-me-use-a-different-long-random-value

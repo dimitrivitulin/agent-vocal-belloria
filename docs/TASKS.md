@@ -1,14 +1,16 @@
 # Feuille de route Belloria
 
-## À faire — choix de la voie restante
+## À faire — canal Telegram
 
-- [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`ready_for_review`)
-  Worker, D1, reprises, MCP authentifié et runbook validés ; prototype distant gelé sans secrets après abandon de la voie Meta.
-- [ ] **BELL-016 — Décision sur la voie WhatsApp restante** (`pending`)
-  Choisir explicitement entre réactiver WAHA derrière la frontière MCP existante ou retirer WhatsApp de la première version.
+- [ ] **BELL-016 — Bot Telegram privé sur Cloudflare** (`ready_for_review`)
+  Worker, D1, MCP et transcription vocale déployés sans secrets ; tests locaux réussis et endpoint de santé confirmé.
+- [ ] **BELL-017 — Activation du bot Telegram de test** (`pending`)
+  Créer le bot et son identifiant définitif, charger les secrets, enregistrer le webhook puis valider un texte et un vocal fictifs.
 
 ## Voie Meta abandonnée
 
+- [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`ready_for_review`)
+  Prototype Meta/Cloudflare validé puis remplacé par le canal Telegram dans BELL-016.
 - [ ] **BELL-014 — Validation Meta avec numéro de test** (`blocked`)
   Arrêté avant soumission de l'examen Meta : aucun numéro transmis, aucun code mobile envoyé et aucune application créée.
 - [ ] **BELL-015 — Préparation du passage en production WhatsApp** (`blocked`)

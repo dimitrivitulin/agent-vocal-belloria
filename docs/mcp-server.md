@@ -1,33 +1,26 @@
 # Serveur MCP Belloria
 
-Le serveur écoute localement sur `http://127.0.0.1:8000/mcp`. Chaque requête doit fournir `Authorization: Bearer <BELLORIA_MCP_TOKEN>`. Sa surface métier dépend de l'interface `WhatsAppGateway`, et non d'une API fournisseur.
+## Surface active sur Cloudflare
 
-Deux outils seulement sont exposés :
+Le Worker expose le contrat JSON-RPC sur `POST /mcp`. Chaque requête exige `Authorization: Bearer <BELLORIA_MCP_TOKEN>`. Le canal est fixé côté serveur : aucun outil ne permet à l'appelant de choisir un chat Telegram ou un autre destinataire.
 
-- `whatsapp_session_status`, en lecture seule ;
-- `whatsapp_send_text`, pour un numéro de 8 à 15 chiffres sans `+`, un texte de 1 à 2 000 caractères et `confirmed: true`.
+Outils exposés :
 
-L'envoi est une action externe : l'appelant doit obtenir une confirmation explicite portant sur le message exact avant de fournir `confirmed: true`. Sans ce champ, le serveur rejette l'appel avant la passerelle. La configuration du fournisseur ne fait pas partie des arguments MCP.
+- `belloria_channel_status` indique seulement si Telegram et la transcription sont configurés ; aucun identifiant ni secret n'est renvoyé.
+- `belloria_list_commands` retourne au plus 20 commandes en attente, avec le texte ou la transcription vocale, ainsi que les erreurs vocales mises en quarantaine.
+- `belloria_complete_command` exige `confirmed: true`, marque une commande en attente ou en quarantaine comme traitée et efface son contenu dans D1.
+- `belloria_send_text` exige le texte exact et `confirmed: true`, puis envoie uniquement vers le chat Belloria configuré.
 
-## Sélection du fournisseur
+Le webhook `POST /webhooks/telegram` vérifie `X-Telegram-Bot-Api-Secret-Token`, compare l'identifiant du chat avec la valeur autorisée et dédoublonne `update_id` dans D1. Un vocal de 5 Mio maximum est téléchargé en mémoire, transcrit en français par Workers AI puis abandonné ; seul le texte transcrit reste jusqu'à la fin de la commande.
 
-Aucun fournisseur n'est actif par défaut. Le démarrage exige une sélection explicite.
+## Configuration
 
-- `WHATSAPP_PROVIDER=meta` active Cloud API avec `META_PHONE_NUMBER_ID`, `META_ACCESS_TOKEN` et `META_GRAPH_VERSION`. La version Graph est obligatoire afin qu'une version périmée ne soit jamais sélectionnée implicitement. Son statut indique uniquement que la configuration est présente : Cloud API n'expose pas de session équivalente à WAHA.
-- `WHATSAPP_PROVIDER=waha` active l'adaptateur de repli historique avec `WAHA_BASE_URL`, `WAHA_API_KEY` et `WAHA_SESSION`.
+Les secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ALLOWED_CHAT_ID` et `BELLORIA_MCP_TOKEN` sont configurés comme secrets Worker. Ils ne doivent apparaître ni dans `wrangler.jsonc`, ni dans Git, ni dans les journaux. Le binding `AI` et le binding D1 `DB` sont déclarés dans `wrangler.jsonc`.
 
-L'adaptateur Meta sait envoyer du texte et récupérer un média via l'URL temporaire fournie par Graph API. Les téléchargements sont limités à 10 Mio et aux familles audio, image, vidéo et PDF. Cette capacité média reste interne : la surface MCP publique conserve ses deux outils. Les configurations Docker historiques restent gelées et ne sont pas déployées.
+## Adaptateurs historiques
 
-## Exécution serverless
+Le serveur Python et les adaptateurs WAHA/Meta restent dans le dépôt uniquement comme prototypes historiques testés. Ils ne font pas partie du Worker actif et aucune variable `META_*` ne doit être configurée. La décision durable du canal courant est décrite dans `docs/decisions/008-canal-telegram-cloudflare.md`.
 
-Le même contrat JSON-RPC est exposé par le Worker Cloudflare sur `POST /mcp`. Le Bearer `BELLORIA_MCP_TOKEN` reste obligatoire et les deux outils sont inchangés. L'envoi Meta utilise uniquement les secrets du Worker et refuse tout appel sans `confirmed: true` avant le premier accès réseau. Le serveur Python et WAHA restent disponibles comme repli local, mais ne font pas partie du déploiement cible.
+## Validation
 
-## Validation locale
-
-```powershell
-python -m unittest discover -s tests -v
-python -m py_compile belloria_mcp/server.py
-docker compose --env-file .env.example config --quiet
-```
-
-Les tests remplacent la passerelle et le transport HTTP par des doubles. Ils testent les adaptateurs WAHA et Meta sans réseau et ne contactent aucun service réel. Le prototype utilise un HTTP JSON-RPC local ; l'exposition distante, TLS et l'intégration OAuth restent hors périmètre et devront être traités avant ChatGPT Work.
+Les tests remplacent D1, Telegram et Workers AI par des doubles. Ils couvrent le secret de webhook, la liste blanche du chat, l'idempotence, la limite des vocaux, l'effacement des commandes et la confirmation avant envoi sans aucun appel réel.

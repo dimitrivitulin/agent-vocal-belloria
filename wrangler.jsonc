@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "belloria-whatsapp",
+  "name": "belloria-assistant",
   "main": "worker/src/index.js",
   "compatibility_date": "2026-08-03",
   "d1_databases": [
@@ -11,6 +11,6 @@
       "migrations_dir": "worker/migrations"
     }
   ],
-  "triggers": { "crons": ["*/5 * * * *"] },
+  "ai": { "binding": "AI" },
   "observability": { "enabled": true }
 }

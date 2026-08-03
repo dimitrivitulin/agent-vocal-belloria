@@ -55,7 +55,7 @@ Sources officielles consultées le 2026-08-03 :
 
 ## Worker Cloudflare livrable
 
-Le Worker dans `worker/src/index.js` expose `GET/POST /webhooks/meta`, `POST /mcp` et `GET /health`. La migration `worker/migrations/0001_webhook_receipts.sql` crée la table D1 des reçus. Elle ne conserve ni corps brut, ni texte, ni numéro de contact, ni URL média. Le cron reprend au plus dix événements par passage ; après cinq échecs, le reçu passe en quarantaine. Les journaux ne contiennent qu'une clé tronquée et un code d'erreur assaini.
+La révision historique de BELL-013 exposait `GET/POST /webhooks/meta`, `POST /mcp` et `GET /health`. La migration `worker/migrations/0001_webhook_receipts.sql` conserve la table D1 des reçus comme trace technique. Depuis BELL-016, `worker/src/index.js` implémente le canal Telegram décrit dans `docs/telegram-cloudflare.md` et n'expose plus la route Meta.
 
 ### Préparation et validation locale
 
