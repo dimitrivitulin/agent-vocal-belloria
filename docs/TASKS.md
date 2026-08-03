@@ -2,8 +2,8 @@
 
 ## À faire — migration sans VM
 
-- [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`pending`)
-  Déployer le webhook Meta et les outils MCP authentifiés sur la cible gratuite retenue, avec idempotence, journaux, secrets et restauration documentés.
+- [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`ready_for_review`)
+  Worker, D1, reprises, MCP authentifié et runbook validés localement ; création des ressources distantes reportée à BELL-014 après confirmation.
 - [ ] **BELL-014 — Validation Meta avec numéro de test** (`pending`)
   Configurer l'application Meta de test, valider texte et vocal de bout en bout et vérifier qu'aucun numéro Belloria réel ni message client n'est utilisé.
 - [ ] **BELL-015 — Préparation du passage en production WhatsApp** (`pending`)

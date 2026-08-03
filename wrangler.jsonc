@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "belloria-whatsapp",
+  "main": "worker/src/index.js",
+  "compatibility_date": "2026-08-03",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "belloria-whatsapp",
+      "database_id": "replace-with-cloudflare-d1-database-id",
+      "migrations_dir": "worker/migrations"
+    }
+  ],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "observability": { "enabled": true }
+}

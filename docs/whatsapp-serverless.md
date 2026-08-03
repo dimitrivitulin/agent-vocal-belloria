@@ -51,6 +51,25 @@ Sources officielles consultées le 2026-08-03 :
 - BELL-013 porte le cœur dans le runtime Worker, crée le schéma D1, l’authentification MCP, les reprises et le déploiement.
 - BELL-014 effectue seulement ensuite la validation avec le numéro de test Meta.
 
+## Worker Cloudflare livrable
+
+Le Worker dans `worker/src/index.js` expose `GET/POST /webhooks/meta`, `POST /mcp` et `GET /health`. La migration `worker/migrations/0001_webhook_receipts.sql` crée la table D1 des reçus. Elle ne conserve ni corps brut, ni texte, ni numéro de contact, ni URL média. Le cron reprend au plus dix événements par passage ; après cinq échecs, le reçu passe en quarantaine. Les journaux ne contiennent qu'une clé tronquée et un code d'erreur assaini.
+
+### Préparation et validation locale
+
+1. Copier `.dev.vars.example` vers `.dev.vars` et remplacer uniquement avec des valeurs de test.
+2. Installer avec `npm install`, puis exécuter `npm test`.
+3. Vérifier le bundle avec `npx wrangler deploy --dry-run`.
+4. Créer la base D1, reporter son identifiant dans `wrangler.jsonc`, puis appliquer localement `npx wrangler d1 migrations apply belloria-whatsapp --local`.
+
+### Déploiement (BELL-014 seulement après confirmation)
+
+Créer les secrets avec `npx wrangler secret put <NOM>`, appliquer la migration distante, puis déployer. `EVENT_PROCESSOR_URL` et `EVENT_PROCESSOR_TOKEN` restent facultatifs ; sans eux, les reçus restent `pending` et aucun effet aval n'est tenté. Aucun secret ne doit être placé dans `wrangler.jsonc`, D1 ou les journaux.
+
+### Sauvegarde et restauration
+
+Avant une modification de schéma, exporter la base avec `npx wrangler d1 export belloria-whatsapp --remote --output backup.sql`. Restaurer dans une base neuve avec `npx wrangler d1 execute <nouvelle-base> --remote --file backup.sql`, vérifier les comptes par état, puis changer le binding lors d'un déploiement contrôlé. La restauration temporelle D1 peut compléter cette exportation ; ses limites doivent être vérifiées au moment de l'opération.
+
 ## Limites du prototype
 
 Le prototype ne prouve ni l’éligibilité du compte Meta, ni la livraison réseau, ni la fenêtre de service, ni les modèles, ni les coûts Meta. Il ne traite pas encore tous les types de messages et ne constitue pas un endpoint déployable tel quel.

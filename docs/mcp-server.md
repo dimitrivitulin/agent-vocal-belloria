@@ -18,6 +18,10 @@ Aucun fournisseur n'est actif par défaut. Le démarrage exige une sélection ex
 
 L'adaptateur Meta sait envoyer du texte et récupérer un média via l'URL temporaire fournie par Graph API. Les téléchargements sont limités à 10 Mio et aux familles audio, image, vidéo et PDF. Cette capacité média reste interne : la surface MCP publique conserve ses deux outils. Les configurations Docker historiques restent gelées et ne sont pas déployées.
 
+## Exécution serverless
+
+Le même contrat JSON-RPC est exposé par le Worker Cloudflare sur `POST /mcp`. Le Bearer `BELLORIA_MCP_TOKEN` reste obligatoire et les deux outils sont inchangés. L'envoi Meta utilise uniquement les secrets du Worker et refuse tout appel sans `confirmed: true` avant le premier accès réseau. Le serveur Python et WAHA restent disponibles comme repli local, mais ne font pas partie du déploiement cible.
+
 ## Validation locale
 
 ```powershell

@@ -4,3 +4,8 @@
 .webhook-events/
 __pycache__/
 *.pyc
+node_modules/
+.npm-cache/
+.wrangler/
+.wrangler-config/
+.dev.vars
