@@ -1,6 +1,6 @@
 .env
+.env.cloud
 .sessions/
 .webhook-events/
 __pycache__/
 *.pyc
-

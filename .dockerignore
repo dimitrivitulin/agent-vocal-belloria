@@ -1,0 +1,7 @@
+.env
+.env.cloud
+.git
+.sessions
+.webhook-events
+__pycache__
+*.pyc

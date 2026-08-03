@@ -1,0 +1,10 @@
+FROM python:3.13.7-alpine3.22
+
+WORKDIR /app
+COPY belloria_mcp /app/belloria_mcp
+
+RUN addgroup -S belloria && adduser -S -G belloria belloria
+USER belloria
+
+EXPOSE 8000
+CMD ["python", "-m", "belloria_mcp.server"]

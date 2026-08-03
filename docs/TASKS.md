@@ -7,13 +7,10 @@
 - [ ] **BELL-004 — Passerelle WhatsApp WAHA** (`ready_for_review`)
   Prototype local validé hors exécution Docker, à confirmer sur un hôte équipé.
 
-## À faire
-
-- [ ] **BELL-008 — Déploiement cloud du prototype**
-  Déployer le bridge sur une infrastructure persistante et sécurisée avec un numéro de test.
-
 ## Terminé
 
+- [x] **BELL-008 — Déploiement cloud du prototype**
+  Configuration sécurisée et runbook validés localement, sans activation distante.
 - [x] **BELL-007 — Automatisation ChatGPT Work**
   Passage périodique testé localement et compte rendu soumis à confirmation.
 - [x] **BELL-006 — Synchronisation du CRM Notion**

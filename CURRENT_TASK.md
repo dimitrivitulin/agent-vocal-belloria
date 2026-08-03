@@ -1,43 +1,47 @@
-# BELL-007 — Automatisation ChatGPT Work
+# BELL-008 — Déploiement cloud du prototype
 
 Statut: completed
-Branche: `codex/bell-007-automatisation-chatgpt-work`
+Branche: `codex/bell-008-deploiement-cloud-prototype`
 Dernière mise à jour: 2026-08-03
 
 ## Objectif
 
-Définir et tester le passage périodique qui traite la file Gmail, synchronise les demandes qualifiées et prépare un compte rendu WhatsApp sans contacter de service réel.
+Préparer un déploiement reproductible et sécurisé de WAHA et du MCP Belloria sur une VM persistante, sans activer de service réel.
 
 ## Critères de réussite
 
-- Les messages candidats sont traités du plus ancien au plus récent.
-- Chaque issue produit exactement un état Gmail terminal cohérent.
-- Une erreur CRM reste rejouable et ne produit pas de faux succès.
-- Le compte rendu distingue succès, revues, exclusions et erreurs.
-- L'envoi WhatsApp reste un brouillon soumis à confirmation explicite.
-- Les tests utilisent uniquement des doubles mémoire.
+- Seuls HTTP/HTTPS sont exposés par le proxy ; WAHA et les services internes restent privés.
+- TLS, persistance, secrets et image WAHA versionnée sont configurés.
+- Un contrôle local rejette les secrets d'exemple et les tags WAHA flottants.
+- Le runbook couvre installation, vérification, sauvegarde et reprise.
+- Aucun déploiement distant ni compte WhatsApp réel n'est activé.
 
 ## Périmètre
 
-- Orchestrateur local et contrats abstraits Gmail/qualification/CRM.
-- Tests des transitions, reprises et rapports de passage.
-- Runbook et prompt de configuration ChatGPT Work.
-- Aucun accès Gmail, Notion ou WhatsApp réel et aucune activation distante.
+- Configuration Docker Compose cloud et proxy TLS.
+- Image reproductible du serveur MCP et volumes persistants.
+- Validation de configuration et documentation opératoire.
+- Aucun changement OCI, DNS ou WhatsApp réel sans confirmation.
 
 ## Fichiers concernés
 
-- `belloria_work/`
-- `tests/test_work_automation.py`
-- `docs/chatgpt-work-automation.md`
+- `compose.cloud.yaml`
+- `Dockerfile.mcp`
+- `deploy/Caddyfile`
+- `.env.cloud.example`
+- `tools/check_cloud_config.py`
+- `tests/test_cloud_config.py`
+- `docs/cloud-deployment.md`
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 
 ## Prochaine action
 
-Configurer les connecteurs sur un environnement de test, puis effectuer un passage en lecture seule avant toute activation distante.
+Créer la VM et valider le déploiement avec un numéro de test après confirmation explicite.
 
 ## Validations effectuées
 
-- 25 tests unitaires réussis, dont 7 dédiés au passage périodique, sans accès externe.
+- 28 tests unitaires réussis, dont 3 contrôles de configuration cloud.
 - Compilation Python et `git diff --check` réussis.
-- Compte rendu limité à un brouillon sans données personnelles ni message d'erreur brut.
+- Le fichier d'exemple est correctement rejeté tant que ses secrets ne sont pas remplacés.
+- Rendu Docker Compose différé : aucun moteur Docker n'est installé sur ce poste.

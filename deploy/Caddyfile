@@ -1,0 +1,14 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$BELLORIA_MCP_DOMAIN} {
+	encode zstd gzip
+
+	@allowed path /mcp /health
+	handle @allowed {
+		reverse_proxy belloria-mcp:8000
+	}
+
+	respond 404
+}
