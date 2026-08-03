@@ -1,48 +1,48 @@
-# BELL-003 — Qualification des emails Gmail
+# BELL-004 — Passerelle WhatsApp WAHA
 
-Statut: completed
-Branche: `codex/bell-003-qualification-emails-gmail`
+Statut: ready_for_review
+Branche: `codex/bell-004-passerelle-whatsapp-waha`
 Dernière mise à jour: 2026-08-03
 
 ## Objectif
 
-Définir un routage Gmail minimal et déterministe pour isoler les demandes commerciales, distinguer les formulaires Tally des emails libres et permettre un traitement idempotent.
+Fournir un prototype local WAHA Core avec moteur NOWEB, stockage persistant et réception vérifiable de webhooks simulés, sans connecter de compte WhatsApp réel.
 
 ## Critères de réussite
 
-- Les labels et filtres Gmail couvrent les sources connues et excluent les catégories sans intérêt.
-- Le contrat d'entrée décrit les champs Gmail nécessaires et les états du traitement.
-- Le format Tally est extractible sans IA, avec gestion explicite des champs absents ou inconnus.
-- Les règles de reprise, d'échec et d'idempotence sont compatibles avec le modèle CRM Notion.
-- Des cas de test représentatifs permettent d'implémenter BELL-007 sans décision structurante restante.
+- Compose lance WAHA NOWEB avec API uniquement sur la boucle locale et secrets injectés hors Git.
+- Les données de session utilisent un volume persistant distinct des fichiers suivis.
+- Le récepteur local vérifie la signature HMAC et journalise les événements valides.
+- Une simulation déterministe couvre succès, signature absente/invalide et disponibilité.
+- La procédure d'exploitation locale et les limites avant BELL-005 sont documentées.
 
-## Travail terminé
+## Périmètre
 
-- Taxonomie des labels et ordre logique des filtres Gmail définis.
-- Contrats de qualification des emails libres et formulaires Tally documentés.
-- États, reprise, idempotence et cas de validation spécifiés.
-- Autorité de succès Notion et traitement Gmail par message consignés dans une décision durable.
-
-## Prochaine action
-
-Ouvrir `BELL-004 — Passerelle WhatsApp WAHA`.
+- Configuration Docker Compose et exemple d'environnement.
+- Récepteur de webhooks local minimal et tests automatisés.
+- Guide de démarrage, simulation, arrêt, reprise et sécurité.
+- Aucune connexion WhatsApp, aucun message réel et aucun déploiement cloud.
 
 ## Fichiers concernés
 
-- `docs/gmail-qualification.md`
-- `docs/decisions/003-qualification-emails-gmail.md`
+- `compose.yaml`
+- `.env.example`
+- `.gitignore`
+- `tools/webhook_receiver.py`
+- `tools/simulate_webhook.py`
+- `tests/test_webhook_receiver.py`
+- `docs/waha-local.md`
+- `docs/decisions/004-passerelle-whatsapp-waha.md`
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 
 ## Validations effectuées
 
-- Cohérence avec le modèle CRM Notion : réussie.
-- Vérification des comportements Gmail sur la documentation officielle : réussie.
-- `git diff --check` : réussi.
-- Examen du périmètre et recherche de secrets : réussis.
+- Tests HTTP/HMAC : 4 réussis.
+- Compilation Python : réussie.
+- `git diff --check`, examen du périmètre et recherche de secrets : réussis.
+- Validation Docker Compose : non exécutée, Docker absent de l'environnement.
 
-## Risques ou points de vigilance
+## Prochaine action
 
-- Aucun filtre Gmail réel ne doit être créé dans ce lot.
-- Les adresses expéditrices et exemples de messages réels restent à confirmer sur des échantillons anonymisés.
-- Aucun test ne doit accéder à une boîte Gmail réelle.
+Sur un hôte Docker, exécuter `docker compose --env-file .env.example config --quiet`, démarrer les services et lancer la simulation avant de marquer le lot `completed`.

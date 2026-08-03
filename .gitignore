@@ -1,0 +1,6 @@
+.env
+.sessions/
+.webhook-events/
+__pycache__/
+*.pyc
+

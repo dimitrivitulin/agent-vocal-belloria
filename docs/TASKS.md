@@ -2,12 +2,11 @@
 
 ## En cours
 
-Aucun lot actif. Le prochain lot proposé est `BELL-004 — Passerelle WhatsApp WAHA`.
+- [ ] **BELL-004 — Passerelle WhatsApp WAHA** (`ready_for_review`)
+  Prototype local NOWEB, stockage persistant et webhooks simulés vérifiables.
 
 ## À faire
 
-- [ ] **BELL-004 — Passerelle WhatsApp WAHA**
-  Déployer localement WAHA NOWEB avec stockage persistant et webhooks simulés.
 - [ ] **BELL-005 — Serveur MCP Belloria**
   Exposer des outils WhatsApp limités, authentifiés et testés.
 - [ ] **BELL-006 — Synchronisation du CRM Notion**
