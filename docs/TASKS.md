@@ -2,12 +2,10 @@
 
 ## En cours
 
-Aucun lot actif. Le prochain lot proposé est `BELL-002 — Modèle du CRM Notion`.
+Aucun lot actif. Le prochain lot proposé est `BELL-003 — Qualification des emails Gmail`.
 
 ## À faire
 
-- [ ] **BELL-002 — Modèle du CRM Notion**
-  Définir les bases, propriétés, statuts et règles de déduplication.
 - [ ] **BELL-003 — Qualification des emails Gmail**
   Définir les labels, filtres, formats Tally et règles de traitement idempotent.
 - [ ] **BELL-004 — Passerelle WhatsApp WAHA**
@@ -23,6 +21,8 @@ Aucun lot actif. Le prochain lot proposé est `BELL-002 — Modèle du CRM Notio
 
 ## Terminé
 
+- [x] **BELL-002 — Modèle du CRM Notion**
+  Deux bases reliées, cycle commercial, normalisation, déduplication et idempotence définis.
 - [x] **BELL-009 — Autonomie Codex sécurisée**
   Écriture workspace, réseau et recherche web activés avec confirmations sensibles conservées.
 - [x] **BELL-001 — Organisation du projet**
