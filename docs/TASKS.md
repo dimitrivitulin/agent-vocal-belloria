@@ -1,10 +1,5 @@
 # Feuille de route Belloria
 
-## Prochaine feature
-
-- [ ] **BELL-012 — Adaptateur WhatsApp Cloud API** (`pending`)
-  Implémenter l'envoi de texte, la récupération des médias et la normalisation des événements Meta, uniquement avec des doubles et des secrets d'exemple.
-
 ## À faire — migration sans VM
 
 - [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`pending`)
@@ -25,6 +20,8 @@
 
 ## Terminé
 
+- [x] **BELL-012 — Adaptateur WhatsApp Cloud API**
+  Envoi texte, récupération bornée des médias et normalisation des messages/statuts validés avec des doubles HTTP, sans secret ni appel réel.
 - [x] **BELL-011 — Abstraction de la passerelle WhatsApp**
   Le MCP dépend d'une interface fournisseur neutre ; WAHA reste un adaptateur de repli testé et désactivé sans sélection explicite.
 - [x] **BELL-010 — Architecture WhatsApp sans serveur**

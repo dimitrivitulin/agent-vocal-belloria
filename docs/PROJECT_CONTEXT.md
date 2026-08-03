@@ -59,4 +59,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase de prototypage. La voie VM/WAHA a été préparée localement puis gelée. L'architecture serverless Cloudflare/Meta a été validée par contrat local, sans compte réel, secret ou déploiement ; BELL-011 doit maintenant découpler la passerelle WhatsApp.
+Le projet est en phase de prototypage. La voie VM/WAHA a été préparée localement puis gelée. La passerelle est découplée et l'adaptateur Cloud API est couvert localement pour le texte, les médias bornés et les événements normalisés, sans compte réel, secret ni déploiement. BELL-013 doit maintenant porter le webhook et le MCP sur Cloudflare Workers avec D1.

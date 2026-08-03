@@ -2,7 +2,7 @@
 
 ## Résultat
 
-Le prototype confirme que l’entrée WhatsApp peut être une fonction HTTP sans processus persistant. Le cœur dans `belloria_cloud/webhook.py` vérifie le challenge Meta, authentifie le corps brut avec `X-Hub-Signature-256` et extrait des clés d’idempotence depuis des événements synthétiques. Aucun appel Meta ni déploiement n’est nécessaire pour ces garanties.
+Le prototype confirme que l’entrée WhatsApp peut être une fonction HTTP sans processus persistant. Le cœur dans `belloria_cloud/webhook.py` vérifie le challenge Meta, authentifie le corps brut avec `X-Hub-Signature-256`, extrait les clés d’idempotence et normalise les champs utiles des messages et statuts. L'adaptateur Python envoie le texte et récupère les médias derrière un transport HTTP remplaçable. Aucun appel Meta ni déploiement n’est nécessaire pour ces garanties.
 
 ## Cible retenue
 
@@ -47,7 +47,7 @@ Sources officielles consultées le 2026-08-03 :
 ## Découpage de réalisation
 
 - BELL-011 introduit une interface de passerelle sans dépendance WAHA ou Meta.
-- BELL-012 implémente l’adaptateur Cloud API et la normalisation complète, avec doubles HTTP.
+- BELL-012 implémente l’adaptateur Cloud API et la normalisation des messages/statuts utiles, avec doubles HTTP. Les nouveaux types Meta devront être ajoutés explicitement lorsqu'ils deviennent nécessaires.
 - BELL-013 porte le cœur dans le runtime Worker, crée le schéma D1, l’authentification MCP, les reprises et le déploiement.
 - BELL-014 effectue seulement ensuite la validation avec le numéro de test Meta.
 

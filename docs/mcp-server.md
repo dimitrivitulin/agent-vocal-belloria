@@ -11,7 +11,12 @@ L'envoi est une action externe : l'appelant doit obtenir une confirmation explic
 
 ## Sélection du fournisseur
 
-Aucun fournisseur n'est actif par défaut. Le démarrage exige une sélection explicite. `WHATSAPP_PROVIDER=waha` active l'adaptateur de repli historique, qui lit `WAHA_BASE_URL`, `WAHA_API_KEY` et `WAHA_SESSION`. Les configurations Docker historiques déclarent ce choix explicitement, mais restent gelées et ne sont pas déployées. L'adaptateur WhatsApp Cloud API relève de BELL-012.
+Aucun fournisseur n'est actif par défaut. Le démarrage exige une sélection explicite.
+
+- `WHATSAPP_PROVIDER=meta` active Cloud API avec `META_PHONE_NUMBER_ID`, `META_ACCESS_TOKEN` et `META_GRAPH_VERSION`. La version Graph est obligatoire afin qu'une version périmée ne soit jamais sélectionnée implicitement. Son statut indique uniquement que la configuration est présente : Cloud API n'expose pas de session équivalente à WAHA.
+- `WHATSAPP_PROVIDER=waha` active l'adaptateur de repli historique avec `WAHA_BASE_URL`, `WAHA_API_KEY` et `WAHA_SESSION`.
+
+L'adaptateur Meta sait envoyer du texte et récupérer un média via l'URL temporaire fournie par Graph API. Les téléchargements sont limités à 10 Mio et aux familles audio, image, vidéo et PDF. Cette capacité média reste interne : la surface MCP publique conserve ses deux outils. Les configurations Docker historiques restent gelées et ne sont pas déployées.
 
 ## Validation locale
 
@@ -21,4 +26,4 @@ python -m py_compile belloria_mcp/server.py
 docker compose --env-file .env.example config --quiet
 ```
 
-Les tests remplacent la passerelle par un double et testent l'adaptateur WAHA sans réseau. Ils ne contactent aucun service réel. Le prototype utilise un HTTP JSON-RPC local ; l'exposition distante, TLS et l'intégration OAuth restent hors périmètre et devront être traités avant ChatGPT Work.
+Les tests remplacent la passerelle et le transport HTTP par des doubles. Ils testent les adaptateurs WAHA et Meta sans réseau et ne contactent aucun service réel. Le prototype utilise un HTTP JSON-RPC local ; l'exposition distante, TLS et l'intégration OAuth restent hors périmètre et devront être traités avant ChatGPT Work.

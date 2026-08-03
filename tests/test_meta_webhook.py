@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import unittest
 
-from belloria_cloud.webhook import iter_events, valid_signature, verify_challenge
+from belloria_cloud.webhook import iter_events, normalize_event, valid_signature, verify_challenge
 
 
 class MetaWebhookTest(unittest.TestCase):
@@ -36,6 +36,20 @@ class MetaWebhookTest(unittest.TestCase):
         self.assertEqual(list(iter_events({"object": "page", "entry": []})), [])
         payload = {"object": "whatsapp_business_account", "entry": [{"changes": [{"field": "other"}]}]}
         self.assertEqual(list(iter_events(payload)), [])
+
+    def test_normalizes_text_media_and_status_events(self) -> None:
+        payload = {"object": "whatsapp_business_account", "entry": [{"changes": [{"field": "messages", "value": {
+            "metadata": {"phone_number_id": "100200300"},
+            "messages": [
+                {"id": "wamid.text", "from": "3361", "timestamp": "10", "type": "text", "text": {"body": "Bonjour"}},
+                {"id": "wamid.audio", "from": "3361", "timestamp": "11", "type": "audio", "audio": {"id": "media-1", "mime_type": "audio/ogg"}},
+            ],
+            "statuses": [{"id": "wamid.out", "recipient_id": "3361", "timestamp": "12", "status": "read"}],
+        }}]}]}
+        normalized = [normalize_event(event) for event in iter_events(payload)]
+        self.assertEqual((normalized[0].sender, normalized[0].text), ("3361", "Bonjour"))
+        self.assertEqual((normalized[1].message_type, normalized[1].media_id), ("audio", "media-1"))
+        self.assertEqual((normalized[2].recipient, normalized[2].status), ("3361", "read"))
 
 
 if __name__ == "__main__":

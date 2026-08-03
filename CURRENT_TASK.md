@@ -1,47 +1,42 @@
-# BELL-011 — Abstraction de la passerelle WhatsApp
+# BELL-012 — Adaptateur WhatsApp Cloud API
 
 Statut: completed
-Branche: `codex/bell-011-abstraction-passerelle-whatsapp`
+Branche: `codex/bell-012-adaptateur-whatsapp-cloud-api`
 Dernière mise à jour: 2026-08-03
 
 ## Objectif
 
-Découpler les fonctions Belloria de WAHA derrière une interface fournisseur, tout en conservant l'adaptateur WAHA comme repli testé et désactivé par défaut.
+Implémenter l'adaptateur Meta sans appel réel : envoi texte, récupération bornée des médias et normalisation des événements webhook.
 
 ## Critères de réussite
 
-- Le MCP dépend d'une interface fournisseur neutre pour l'état et l'envoi de texte.
-- Les noms, schémas et règles de confirmation des outils MCP publics restent inchangés.
-- WAHA est isolé dans un adaptateur testé et n'est actif qu'après sélection explicite.
-- Aucun adaptateur Meta, appel réseau réel ou déploiement n'est ajouté.
-
-## Périmètre
-
-- Interface `WhatsAppGateway`, fabrique de configuration et adaptateur WAHA.
-- Injection de la passerelle dans le dispatch MCP existant.
-- Tests unitaires et documentation de la sélection explicite du fournisseur.
-- Aucun changement du protocole MCP public ni implémentation Cloud API.
+- `WHATSAPP_PROVIDER=meta` exige uniquement des secrets/configurations explicites.
+- L'envoi texte et le téléchargement média sont couverts par des doubles HTTP.
+- Les médias dépassant la taille ou le type autorisé sont rejetés.
+- Messages et statuts Meta sont normalisés sans données implicites.
+- Le MCP public conserve ses deux outils et aucun service réel n'est contacté.
 
 ## Fichiers concernés
 
 - `belloria_mcp/gateway.py`
-- `belloria_mcp/server.py`
+- `belloria_cloud/webhook.py`
 - `tests/test_mcp_server.py`
+- `tests/test_meta_webhook.py`
+- `.env.example`
 - `docs/mcp-server.md`
-- `compose.yaml`
-- `compose.cloud.yaml`
+- `docs/whatsapp-serverless.md`
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 
 ## Prochaine action
 
-Implémenter ensuite **BELL-012 — Adaptateur WhatsApp Cloud API** avec des doubles et secrets d'exemple uniquement.
+Implémenter ensuite **BELL-013 — Webhook et MCP serverless Belloria** sur Cloudflare Workers avec D1.
 
 ## Résultat
 
-Le MCP dépend désormais d'une interface fournisseur neutre. WAHA est conservé comme adaptateur de repli testé, inactif sans `WHATSAPP_PROVIDER=waha`, sans changement des deux outils MCP publics.
+L'adaptateur Meta envoie le texte, récupère les médias HTTPS avec limite de taille/type et normalise les messages et statuts utiles derrière des doubles HTTP.
 
 ## Validations effectuées
 
-- 35 tests unitaires réussis, dont l'activation explicite et le rejet d'un fournisseur inconnu.
-- Compilation Python et `git diff --check` réussis ; aucun service réel contacté.
+- 40 tests unitaires et compilation Python réussis ; aucun service réel contacté.
+- `git diff --check` réussi et diff limité au lot BELL-012.

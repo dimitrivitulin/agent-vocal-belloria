@@ -5,7 +5,7 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from unittest.mock import Mock
 
-from belloria_mcp.gateway import WahaGateway, WhatsAppGateway, gateway_from_env
+from belloria_mcp.gateway import HttpResponse, MetaCloudGateway, WahaGateway, WhatsAppGateway, gateway_from_env
 from belloria_mcp.server import McpHandler, dispatch
 
 
@@ -39,6 +39,44 @@ class McpServerTest(unittest.TestCase):
     def test_unknown_provider_is_rejected(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "unsupported WhatsApp provider"):
             gateway_from_env({"WHATSAPP_PROVIDER": "other"})
+
+    def test_meta_provider_requires_explicit_configuration(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "META_PHONE_NUMBER_ID"):
+            gateway_from_env({"WHATSAPP_PROVIDER": "meta"})
+        gateway = gateway_from_env({"WHATSAPP_PROVIDER": "meta", "META_PHONE_NUMBER_ID": "123", "META_ACCESS_TOKEN": "test-token", "META_GRAPH_VERSION": "v99.0"})
+        self.assertIsInstance(gateway, MetaCloudGateway)
+
+    def test_meta_send_text_uses_graph_contract(self) -> None:
+        transport = Mock(return_value=HttpResponse(200, {"Content-Type": "application/json"}, b'{"messages":[{"id":"wamid.1"}]}'))
+        gateway = MetaCloudGateway("phone-id", "test-token", graph_version="v99.0", transport=transport)
+        result = gateway.send_text("33612345678", "Bonjour")
+        self.assertEqual(result["messages"][0]["id"], "wamid.1")
+        method, url, headers, body = transport.call_args.args
+        self.assertEqual((method, url), ("POST", "https://graph.facebook.com/v99.0/phone-id/messages"))
+        self.assertEqual(headers["Authorization"], "Bearer test-token")
+        self.assertEqual(json.loads(body)["text"]["body"], "Bonjour")
+
+    def test_meta_media_download_uses_metadata_url_and_limits_content(self) -> None:
+        transport = Mock(side_effect=[
+            HttpResponse(200, {"Content-Type": "application/json"}, b'{"url":"https://lookaside.example/media"}'),
+            HttpResponse(200, {"Content-Type": "audio/ogg", "Content-Length": "3"}, b"ogg"),
+        ])
+        media = MetaCloudGateway("phone-id", "test-token", graph_version="v99.0", transport=transport).get_media("media-1")
+        self.assertEqual((media.content_type, media.data), ("audio/ogg", b"ogg"))
+        self.assertEqual(transport.call_args_list[1].args[2]["Authorization"], "Bearer test-token")
+        self.assertEqual(transport.call_args_list[1].kwargs["max_bytes"], 10 * 1024 * 1024)
+
+    def test_meta_media_rejects_unsupported_or_oversized_content(self) -> None:
+        for headers, body, message in (
+            ({"Content-Type": "text/html"}, b"no", "unsupported media type"),
+            ({"Content-Type": "audio/ogg", "Content-Length": "4"}, b"data", "size limit"),
+        ):
+            transport = Mock(side_effect=[
+                HttpResponse(200, {}, b'{"url":"https://lookaside.example/media"}'),
+                HttpResponse(200, headers, body),
+            ])
+            with self.assertRaisesRegex(RuntimeError, message):
+                MetaCloudGateway("phone-id", "test-token", graph_version="v99.0", transport=transport, max_media_bytes=3).get_media("media-1")
 
     def test_unknown_tool_is_rejected(self) -> None:
         response = dispatch({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "raw_waha", "arguments": {}}}, self.client)
