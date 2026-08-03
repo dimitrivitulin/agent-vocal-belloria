@@ -1,7 +1,7 @@
 # 006 — Architecture WhatsApp serverless sur Cloudflare
 
 Date: 2026-08-03
-Statut: acceptée
+Statut: remplacée par [007 — Abandon de la voie WhatsApp officielle](007-abandon-whatsapp-officiel.md)
 
 ## Contexte
 

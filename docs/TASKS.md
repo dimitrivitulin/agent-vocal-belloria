@@ -1,13 +1,18 @@
 # Feuille de route Belloria
 
-## À faire — migration sans VM
+## À faire — choix de la voie restante
 
 - [ ] **BELL-013 — Webhook et MCP serverless Belloria** (`ready_for_review`)
-  Worker, D1, reprises, MCP authentifié et runbook validés localement ; création des ressources distantes reportée à BELL-014 après confirmation.
-- [ ] **BELL-014 — Validation Meta avec numéro de test** (`pending`)
-  Configurer l'application Meta de test, valider texte et vocal de bout en bout et vérifier qu'aucun numéro Belloria réel ni message client n'est utilisé.
-- [ ] **BELL-015 — Préparation du passage en production WhatsApp** (`pending`)
-  Documenter la vérification Meta, le numéro cible, les modèles, les coûts, le consentement et le retour arrière, sans migrer le numéro avant confirmation.
+  Worker, D1, reprises, MCP authentifié et runbook validés ; prototype distant gelé sans secrets après abandon de la voie Meta.
+- [ ] **BELL-016 — Décision sur la voie WhatsApp restante** (`pending`)
+  Choisir explicitement entre réactiver WAHA derrière la frontière MCP existante ou retirer WhatsApp de la première version.
+
+## Voie Meta abandonnée
+
+- [ ] **BELL-014 — Validation Meta avec numéro de test** (`blocked`)
+  Arrêté avant soumission de l'examen Meta : aucun numéro transmis, aucun code mobile envoyé et aucune application créée.
+- [ ] **BELL-015 — Préparation du passage en production WhatsApp** (`blocked`)
+  Bloqué par l'abandon de la voie WhatsApp Cloud API officielle.
 
 ## Voie historique gelée
 

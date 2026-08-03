@@ -21,9 +21,9 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 - Gmail applique des filtres et labels aux messages candidats.
 - Une tâche ChatGPT Work cloud consulte périodiquement les éléments à traiter.
 - Notion constitue la source de vérité du CRM métier.
-- Le prototype WAHA Core/NOWEB est conservé comme solution de repli non activée.
-- La cible à valider utilise WhatsApp Cloud API, hébergée par Meta, afin de supprimer la dépendance à une machine persistante.
-- La cible retenue utilise WhatsApp Cloud API avec Cloudflare Workers pour le webhook et le MCP, et D1 pour l'idempotence et l'état de traitement ; aucun service distant n'est encore déployé.
+- La voie WhatsApp Cloud API officielle est abandonnée depuis le 2026-08-03 ; aucune demande d'examen Meta ni configuration de secrets ne doit être reprise.
+- Le Worker Cloudflare et D1 issus du prototype serverless restent gelés, sans connexion à Meta ni usage de production.
+- Le prototype WAHA Core/NOWEB reste désactivé. Un prochain lot doit choisir explicitement entre sa réactivation contrôlée et le retrait de WhatsApp de la première version.
 
 Cette architecture reste susceptible d'évoluer après validation du prototype. Les décisions durables sont consignées dans `docs/decisions/`.
 
@@ -41,11 +41,11 @@ Cette architecture reste susceptible d'évoluer après validation du prototype. 
 
 - Le moteur doit être proportionné à un faible volume et éviter les services d'orchestration payants.
 - ChatGPT Work fonctionne par tâche planifiée et ne reçoit pas directement un webhook Gmail ou WhatsApp.
-- La Cloud API impose les règles Meta Business, les fenêtres de service et une tarification susceptible d'évoluer ; aucun coût nul permanent ne doit être promis.
+- La voie Cloud API/Meta n'est plus une cible active et ne doit pas être relancée sans nouvelle décision d'architecture.
 - La solution WAHA de repli peut être déconnectée ou restreinte par WhatsApp.
 - Le numéro principal Belloria ne doit pas être utilisé pendant les premiers tests.
 - WAHA ne doit jamais être exposé directement à Internet.
-- Les jetons Meta, secrets de webhook et éventuelles sessions WAHA de repli sont des secrets critiques et doivent utiliser un stockage protégé.
+- Les éventuelles sessions WAHA de repli sont des secrets critiques et doivent utiliser un stockage protégé ; aucun jeton Meta ne doit être configuré dans l'état actuel.
 - Aucun email client ne doit être envoyé automatiquement au début du projet.
 
 ## Sources de demandes observées
@@ -59,4 +59,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase de prototypage. La voie VM/WAHA a été préparée localement puis gelée. La passerelle est découplée et l'adaptateur Cloud API est couvert localement pour le texte, les médias bornés et les événements normalisés, sans compte réel, secret ni déploiement. BELL-013 doit maintenant porter le webhook et le MCP sur Cloudflare Workers avec D1.
+Le projet est en phase de prototypage. La voie Cloud API/Meta est abandonnée après le refus de création de l'application de test ; le Worker et D1 déjà créés restent gelés sans secrets. La voie VM/WAHA est préparée localement mais demeure désactivée. BELL-016 doit décider de la voie restante avant toute nouvelle activation WhatsApp.

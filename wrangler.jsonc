@@ -7,7 +7,7 @@
     {
       "binding": "DB",
       "database_name": "belloria-whatsapp",
-      "database_id": "replace-with-cloudflare-d1-database-id",
+      "database_id": "7e14b969-fd11-4c9b-88ab-7776321914cd",
       "migrations_dir": "worker/migrations"
     }
   ],

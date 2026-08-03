@@ -1,12 +1,14 @@
 # Prototype WhatsApp sans serveur
 
+> **Statut gelé depuis le 2026-08-03.** Belloria a abandonné la voie WhatsApp Cloud API officielle. Ne pas reprendre l'examen Meta, connecter une application ou configurer de secrets. Ce document conserve uniquement les acquis techniques du prototype.
+
 ## Résultat
 
 Le prototype confirme que l’entrée WhatsApp peut être une fonction HTTP sans processus persistant. Le cœur dans `belloria_cloud/webhook.py` vérifie le challenge Meta, authentifie le corps brut avec `X-Hub-Signature-256`, extrait les clés d’idempotence et normalise les champs utiles des messages et statuts. L'adaptateur Python envoie le texte et récupère les médias derrière un transport HTTP remplaçable. Aucun appel Meta ni déploiement n’est nécessaire pour ces garanties.
 
-## Cible retenue
+## Ancienne cible technique (gelée)
 
-La cible de BELL-013 est **Cloudflare Workers avec D1** : un Worker public reçoit le webhook et expose ultérieurement le MCP authentifié ; D1 conserve les reçus d’idempotence, l’état de traitement et une file légère. Les secrets du Worker contiennent le jeton de vérification Meta, l’App Secret, le jeton d’accès Cloud API et les secrets MCP. Les contenus métier durables restent dans Notion.
+La cible définie pour BELL-013 était **Cloudflare Workers avec D1** : un Worker public reçoit le webhook et expose ultérieurement le MCP authentifié ; D1 conserve les reçus d’idempotence, l’état de traitement et une file légère. Les secrets prévus comprenaient le jeton de vérification Meta, l’App Secret, le jeton d’accès Cloud API et les secrets MCP. Aucun de ces secrets Meta ne doit maintenant être configuré. Les contenus métier durables restent dans Notion.
 
 À faible volume, les limites gratuites publiées (100 000 requêtes par jour, 10 ms CPU par invocation et 50 sous-requêtes) sont compatibles avec vérification, insertion d’un reçu et mise en file. D1 Free annonce 500 Mo par base, 5 Go par compte et 7 jours de restauration temporelle. Ce sont des limites contractuelles susceptibles de changer, pas une promesse de gratuité permanente.
 
@@ -49,7 +51,7 @@ Sources officielles consultées le 2026-08-03 :
 - BELL-011 introduit une interface de passerelle sans dépendance WAHA ou Meta.
 - BELL-012 implémente l’adaptateur Cloud API et la normalisation des messages/statuts utiles, avec doubles HTTP. Les nouveaux types Meta devront être ajoutés explicitement lorsqu'ils deviennent nécessaires.
 - BELL-013 porte le cœur dans le runtime Worker, crée le schéma D1, l’authentification MCP, les reprises et le déploiement.
-- BELL-014 effectue seulement ensuite la validation avec le numéro de test Meta.
+- BELL-014 devait effectuer la validation avec le numéro de test Meta ; ce lot est arrêté avant création de l'application et avant soumission de l'examen.
 
 ## Worker Cloudflare livrable
 
@@ -62,9 +64,11 @@ Le Worker dans `worker/src/index.js` expose `GET/POST /webhooks/meta`, `POST /mc
 3. Vérifier le bundle avec `npx wrangler deploy --dry-run`.
 4. Créer la base D1, reporter son identifiant dans `wrangler.jsonc`, puis appliquer localement `npx wrangler d1 migrations apply belloria-whatsapp --local`.
 
-### Déploiement (BELL-014 seulement après confirmation)
+### Déploiement historique de test (gelé)
 
-Créer les secrets avec `npx wrangler secret put <NOM>`, appliquer la migration distante, puis déployer. `EVENT_PROCESSOR_URL` et `EVENT_PROCESSOR_TOKEN` restent facultatifs ; sans eux, les reçus restent `pending` et aucun effet aval n'est tenté. Aucun secret ne doit être placé dans `wrangler.jsonc`, D1 ou les journaux.
+La procédure prévoyait de créer les secrets avec `npx wrangler secret put <NOM>`, d'appliquer la migration distante, puis de déployer. Elle ne doit plus être exécutée tant que la décision 007 reste active. Aucun secret ne doit être placé dans `wrangler.jsonc`, D1 ou les journaux.
+
+L’environnement de test BELL-014 utilise la base D1 `belloria-whatsapp` et le Worker `belloria-whatsapp` sur `belloria-whatsapp.belloria-dvitulin.workers.dev`. La migration initiale est appliquée. Aucun secret Meta ne doit être configuré : cet environnement reste une archive technique incapable d'authentifier un webhook Meta réel ou d'envoyer un message WhatsApp.
 
 ### Sauvegarde et restauration
 
