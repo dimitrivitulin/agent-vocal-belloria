@@ -1,44 +1,43 @@
-# BELL-006 — Synchronisation du CRM Notion
+# BELL-007 — Automatisation ChatGPT Work
 
 Statut: completed
-Branche: `codex/bell-006-synchronisation-crm-notion`
+Branche: `codex/bell-007-automatisation-chatgpt-work`
 Dernière mise à jour: 2026-08-03
 
 ## Objectif
 
-Synchroniser une demande qualifiée vers les bases `Contacts` et `Opportunités` selon le contrat BELL-002, sans doublon et sans écraser les données commerciales manuelles.
+Définir et tester le passage périodique qui traite la file Gmail, synchronise les demandes qualifiées et prépare un compte rendu WhatsApp sans contacter de service réel.
 
 ## Critères de réussite
 
-- Email, téléphone, textes et clés métier sont normalisés avant rapprochement.
-- Les contacts sont rapprochés par email puis téléphone, avec conflit explicite.
-- Les opportunités sont rapprochées par fil Gmail puis clé métier.
-- Rejouer un message déjà traité ne produit aucune mutation.
-- L'ID du message n'est enregistré qu'après toutes les mutations réussies.
-- Les tests utilisent une passerelle mémoire et ne contactent pas Notion réel.
+- Les messages candidats sont traités du plus ancien au plus récent.
+- Chaque issue produit exactement un état Gmail terminal cohérent.
+- Une erreur CRM reste rejouable et ne produit pas de faux succès.
+- Le compte rendu distingue succès, revues, exclusions et erreurs.
+- L'envoi WhatsApp reste un brouillon soumis à confirmation explicite.
+- Les tests utilisent uniquement des doubles mémoire.
 
 ## Périmètre
 
-- Modèles d'entrée, normalisation et moteur de synchronisation.
-- Contrat abstrait de stockage Notion et double mémoire testable.
-- Tests des cas de déduplication et d'échec prévus par BELL-002.
-- Documentation de configuration et écart constaté avec le CRM réel.
-- Aucune migration ni modification des bases Notion réelles.
+- Orchestrateur local et contrats abstraits Gmail/qualification/CRM.
+- Tests des transitions, reprises et rapports de passage.
+- Runbook et prompt de configuration ChatGPT Work.
+- Aucun accès Gmail, Notion ou WhatsApp réel et aucune activation distante.
 
 ## Fichiers concernés
 
-- `belloria_notion/`
-- `tests/test_notion_sync.py`
-- `docs/notion-sync.md`
+- `belloria_work/`
+- `tests/test_work_automation.py`
+- `docs/chatgpt-work-automation.md`
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 
 ## Prochaine action
 
-Après validation du modèle cible, implémenter l'adaptateur Notion et préparer une migration explicite des données réelles.
+Configurer les connecteurs sur un environnement de test, puis effectuer un passage en lecture seule avant toute activation distante.
 
 ## Validations effectuées
 
-- 18 tests unitaires réussis, dont 8 dédiés au CRM, sans accès Notion réel.
+- 25 tests unitaires réussis, dont 7 dédiés au passage périodique, sans accès externe.
 - Compilation Python et `git diff --check` réussis.
-- Schéma Notion réel inspecté en lecture seule ; aucune mutation distante effectuée.
+- Compte rendu limité à un brouillon sans données personnelles ni message d'erreur brut.

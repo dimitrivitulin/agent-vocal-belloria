@@ -9,13 +9,13 @@
 
 ## À faire
 
-- [ ] **BELL-007 — Automatisation ChatGPT Work**
-  Créer et tester la tâche cloud de traitement périodique et de compte rendu.
 - [ ] **BELL-008 — Déploiement cloud du prototype**
   Déployer le bridge sur une infrastructure persistante et sécurisée avec un numéro de test.
 
 ## Terminé
 
+- [x] **BELL-007 — Automatisation ChatGPT Work**
+  Passage périodique testé localement et compte rendu soumis à confirmation.
 - [x] **BELL-006 — Synchronisation du CRM Notion**
   Moteur local de rapprochement et d'idempotence validé, sans mutation du CRM réel.
 - [x] **BELL-003 — Qualification des emails Gmail**
