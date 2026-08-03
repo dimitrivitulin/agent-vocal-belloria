@@ -21,7 +21,7 @@ python3 tools/check_cloud_config.py .env.cloud
 docker compose --env-file .env.cloud -f compose.cloud.yaml config --quiet
 ```
 
-Générer séparément chaque secret avec un générateur cryptographique (au moins 32 octets). Le tag ARM64 WAHA est figé sur `noweb-arm-2026.6.1`; sur x86_64, utiliser `noweb-2026.6.1`. Tester toute montée de version avant de modifier ce tag.
+Générer séparément chaque secret avec un générateur cryptographique. La clé `WAHA_API_KEY` doit contenir au moins 64 caractères alphanumériques ; les autres secrets doivent représenter au moins 32 octets d'entropie. Le tag ARM64 WAHA est figé sur `noweb-arm-2026.7.1`; sur x86_64, utiliser `noweb-2026.7.1`. Tester toute montée de version avant de modifier ce tag.
 
 ## Démarrer sans session réelle
 

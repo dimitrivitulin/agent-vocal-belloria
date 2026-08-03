@@ -34,10 +34,16 @@ def validate(path: Path) -> list[str]:
     image = values.get("WAHA_IMAGE", "")
     if image and not re.fullmatch(r"devlikeapro/waha:noweb(?:-arm)?-\d{4}\.\d+\.\d+", image):
         errors.append("WAHA_IMAGE must pin a versioned NOWEB tag")
-    for key in ("BELLORIA_MCP_TOKEN", "WAHA_API_KEY", "WAHA_DASHBOARD_PASSWORD", "WAHA_WEBHOOK_HMAC_KEY"):
+    for key in ("BELLORIA_MCP_TOKEN", "WAHA_DASHBOARD_PASSWORD", "WAHA_WEBHOOK_HMAC_KEY"):
         value = values.get(key, "")
         if value and "change-me" not in value and len(value) < 32:
             errors.append(f"{key} must contain at least 32 characters")
+    api_key = values.get("WAHA_API_KEY", "")
+    if api_key and "change-me" not in api_key:
+        if len(api_key) < 64:
+            errors.append("WAHA_API_KEY must contain at least 64 characters")
+        elif not api_key.isalnum():
+            errors.append("WAHA_API_KEY must contain only letters and digits")
     return errors
 
 

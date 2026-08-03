@@ -41,7 +41,8 @@ Créer la VM et valider le déploiement avec un numéro de test après confirmat
 
 ## Validations effectuées
 
-- 28 tests unitaires réussis, dont 3 contrôles de configuration cloud.
+- 29 tests unitaires réussis, dont 4 contrôles de configuration cloud.
 - Compilation Python et `git diff --check` réussis.
 - Le fichier d'exemple est correctement rejeté tant que ses secrets ne sont pas remplacés.
+- La clé API WAHA exige 64 caractères alphanumériques et l'image est figée sur `2026.7.1`.
 - Rendu Docker Compose différé : aucun moteur Docker n'est installé sur ce poste.
