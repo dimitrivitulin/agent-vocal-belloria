@@ -50,7 +50,8 @@ Renommer la tâche Codex lorsque la feature active change réellement. Une featu
 - Produire un seul ensemble de changements cohérent par lot.
 - Utiliser des commits conventionnels : `feat`, `fix`, `test`, `docs`, `chore`, `ci`.
 - Créer un commit seulement quand le lot est cohérent et validé.
-- Pousser seulement si l'utilisateur l'a demandé ou si une autorisation durable du projet le prévoit.
+- Pousser tout lot terminé sur sa branche `origin` afin que GitHub reflète l'état local utile ; un travail temporaire ou incomplet peut rester local s'il est explicitement signalé.
+- Avant livraison, comparer les branches locales et distantes et signaler tout commit ou toute branche non publié.
 - Ne jamais forcer un push ni réécrire une branche partagée sans autorisation explicite.
 - Ne jamais pousser directement vers la branche principale.
 

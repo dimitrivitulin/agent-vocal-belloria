@@ -41,6 +41,7 @@ Cette architecture reste susceptible d'évoluer après validation du prototype. 
 
 ## Contraintes importantes
 
+- Le dépôt local doit rester représentatif du dépôt GitHub : toute branche de lot conservée localement et tout commit terminé doivent être publiés sur `origin`, sauf décision explicite de garder un travail local temporaire. Avant livraison, vérifier les écarts local/distant et signaler toute exception.
 - Le moteur doit être proportionné à un faible volume et éviter les services d'orchestration payants.
 - ChatGPT Work fonctionne par tâche planifiée ; les commandes Telegram attendent dans D1 jusqu'à son prochain passage.
 - La voie Cloud API/Meta n'est plus une cible active et ne doit pas être relancée sans nouvelle décision d'architecture.
@@ -55,7 +56,6 @@ Cette architecture reste susceptible d'évoluer après validation du prototype. 
 - Tally — formulaire « Devis express » ;
 - emails directs de prospects et de clients ;
 - Mariages.net ;
-- Événementiel Pour Tous.
 
 Les emails promotionnels, notifications sociales et factures techniques doivent être exclus avant tout traitement IA.
 

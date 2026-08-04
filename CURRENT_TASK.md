@@ -1,42 +1,38 @@
-# BELL-020 — CRM Belloria opérationnel
+# BELL-021 — Synchronisation GitHub complète
 
-Statut: completed
-Branche: `codex/bell-020-crm-belloria-operationnel`
+Statut: in_progress
+Branche: `codex/bell-021-synchronisation-github`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Créer un nouveau CRM Notion séparé, adapté aux demandes réellement observées dans Gmail et centré sur les actions commerciales utiles à Belloria.
+Rendre le dépôt GitHub représentatif de l'historique local Belloria et formaliser cette exigence comme règle durable du projet.
 
 ## Critères de réussite
 
-- Un échantillon Tally, Mariages.net, email direct, devis, modification et refus est analysé en lecture seule.
-- Le CRM réel existant reste intact.
-- Une demande ou un événement est suivi sur une seule ligne, enrichie par les messages du même fil Gmail.
-- Le pipeline distingue réponse, qualification, devis, modification, relance, acompte, confirmation, perte et fin de prestation.
-- Des vues immédiatement utiles présentent les actions, le pipeline, le calendrier et les prestations confirmées.
-- Aucun email n'est envoyé et aucune donnée client réelle n'est copiée pendant la validation.
-- La documentation, `git diff --check` et l'examen du diff réussissent.
+- Toutes les branches locales `codex/bell-*` sont publiées sur `origin` avec leur commit de tête.
+- Chaque branche locale suit sa branche distante homonyme.
+- Le contexte stable et les règles de travail exigent la vérification des écarts local/distant avant livraison.
+- `Événementiel Pour Tous` est retiré des sources actives du contexte.
+- Aucun historique n'est réécrit et aucun push forcé n'est utilisé.
+- `git diff --check`, l'examen du diff et le contrôle final local/distant réussissent.
 
 ## Fichiers concernés
 
-- `docs/notion-crm-operational.md`
-- `docs/chatgpt-work-automation.md`
+- `AGENTS.md`
+- `docs/PROJECT_CONTEXT.md`
 - `docs/TASKS.md`
 - `CURRENT_TASK.md`
 
 ## Prochaine action
 
-Faire valider le CRM vide dans Notion, puis ouvrir un lot séparé pour importer un échantillon borné et connecter l'automatisation Gmail.
+Valider et committer la règle, puis publier toutes les branches locales Belloria et vérifier leurs têtes distantes.
 
 ## Résultat
 
-Le nouveau CRM `CRM Belloria — Pilotage commercial` est créé séparément dans Notion avec la base `Demandes & événements` et quatre vues opérationnelles. Le modèle provient des flux Gmail réels observés ; l'ancien CRM et les emails restent inchangés.
+En cours.
 
 ## Validations effectuées
 
-- Échantillons Gmail Tally, Mariages.net, email direct, devis, modification, acompte attendu et refus lus sans mutation.
-- Schéma et vues du nouveau CRM relus via Notion après création.
-- Requête de contrôle : base vide, aucune donnée client importée.
-- Ancien CRM conservé sans modification.
-- `git diff --check`, examen du périmètre et recherche de secrets réussis.
+- Dépôt propre avant ouverture du lot.
+- Inventaire initial : seules BELL-001 et BELL-020 possédaient une branche distante connue localement.
