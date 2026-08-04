@@ -1,42 +1,45 @@
-# BELL-026 — Cadrage agent commercial Telegram
+# BELL-027 — Référentiel commercial Belloria
 
-Statut: completed
-Branche: `codex/bell-026-cadrage-agent-commercial-telegram`
+Statut: ready_for_review
+Branche: `codex/bell-027-referentiel-commercial`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Transformer la feuille de route en programme de construction d'un agent commercial Belloria piloté depuis Telegram, capable de reconstruire un contexte prospect fiable, de maîtriser les prestations et de recommander l'action qui maximise les chances de conversion.
+Construire une source de vérité versionnée des prestations Belloria afin que l'agent puisse recommander une offre sans inventer de prix, de contenu ni de capacité.
 
 ## Critères de réussite
 
-- Telegram reste l'interface privée de pilotage texte et vocal.
-- Le contexte prospect 360 et ses règles de preuve sont définis.
-- Le référentiel commercial nécessaire à une recommandation fiable est défini.
-- Le backlog sépare connaissance, contexte, recommandation, exécution et mesure.
-- Les actions client restent soumises à une validation explicite.
-- La priorité suivante est immédiatement exploitable.
+- Les prestations ont une fiche structurée, une source, une date de preuve et un statut de validation.
+- Seules les fiches `Validé` sont utilisables comme règle commerciale courante.
+- Les prix historiques sont distingués des tarifs validés.
+- Les inconnues opérationnelles sont explicites et bloquent toute promesse automatique.
+- Belloria peut valider les premières fiches dans Notion sans modifier le code.
 
 ## Fichiers concernés
 
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
 - `docs/PROJECT_CONTEXT.md`
-- `docs/agent-commercial-telegram.md`
+- `docs/referentiel-commercial.md`
 
-## Décisions de périmètre
+## Réalisation
 
-- L'agent écrit uniquement dans le CRM Belloria ; les autres dossiers Notion restent hors périmètre de mutation.
-- Gmail, Tally, les devis envoyés et les factures servent de preuves avec une provenance conservée.
-- Le transport Telegram existant est conservé ; sa boucle horaire devient un secours, pas la cible d'expérience conversationnelle.
+- Base Notion `Référentiel commercial Belloria` créée sous la page Belloria.
+- Six fiches sourcées créées : deux grazing tables, deux ateliers, brunch et plateaux.
+- Quatre prix datés du 31 juillet 2026 sont enregistrés en `À valider`, jamais comme tarifs garantis.
+- Composition, logistique connue, associations et informations manquantes sont tracées dans chaque fiche.
+
+## Validation humaine requise
+
+Valider ou corriger les prix, minimums, capacités, délais, frais logistiques, règles commerciales et limites alimentaires. Renseigner `Validé par` et `Dernière validation`, puis passer chaque fiche approuvée à `Validé`.
 
 ## Prochaine action
 
-Exécuter `BELL-027 — Référentiel commercial Belloria` avant de produire automatiquement des recommandations ou des réponses commerciales.
+Après validation Belloria des fiches, clôturer `BELL-027` puis exécuter `BELL-028 — Contexte prospect 360`.
 
 ## État vérifié
 
-- La feuille de route active contient six lots ordonnés de la connaissance à la mesure.
-- Le dossier prospect 360, la hiérarchie des preuves et les limites de mutation sont définis.
-- L'expérience Telegram cible distingue consultation, proposition, confirmation et exécution.
-- `BELL-027` est la seule prochaine priorité fonctionnelle.
+- La base et ses six fiches sont lisibles dans Notion.
+- Toutes les données non approuvées restent en `À valider`.
+- Aucun email n'a été envoyé et aucun CRM prospect n'a été modifié.

@@ -7,9 +7,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 - [x] **BELL-026 — Cadrage agent commercial Telegram** (`completed`)
   Architecture fonctionnelle, contexte prospect 360, référentiel commercial et lots de construction définis dans `docs/agent-commercial-telegram.md`.
 
-- [ ] **BELL-027 — Référentiel commercial Belloria** (`pending`)
+- [ ] **BELL-027 — Référentiel commercial Belloria** (`ready_for_review`)
   Construire et faire valider la source de vérité des prestations : formats, contenus, tarifs ou règles de calcul, minimums, options, logistique, capacité, délais, zones, preuves, objections, associations et ventes additionnelles pertinentes.
   **Terminé lorsque** l'agent peut recommander une prestation et expliquer son calcul sans inventer de prix, de disponibilité ni de contenu.
+  Base Notion et premières fiches sourcées créées ; validation humaine des règles commerciales encore requise.
 
 - [ ] **BELL-028 — Contexte prospect 360** (`pending`)
   Réunir à la demande le formulaire, les échanges Gmail, la fiche CRM, les devis réellement envoyés, les factures `CLIENTS` 2026/2027, les événements confirmés et les conflits de date. Conserver la provenance, la fraîcheur et les incertitudes de chaque fait.
