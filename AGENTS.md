@@ -50,10 +50,12 @@ Renommer la tâche Codex lorsque la feature active change réellement. Une featu
 - Produire un seul ensemble de changements cohérent par lot.
 - Utiliser des commits conventionnels : `feat`, `fix`, `test`, `docs`, `chore`, `ci`.
 - Créer un commit seulement quand le lot est cohérent et validé.
+- Les commits locaux et les pushs vers les branches de travail sur `origin` sont autorisés sans confirmation supplémentaire de l'utilisateur.
 - Pousser tout lot terminé sur sa branche `origin` afin que GitHub reflète l'état local utile ; un travail temporaire ou incomplet peut rester local s'il est explicitement signalé.
 - Avant livraison, comparer les branches locales et distantes et signaler tout commit ou toute branche non publié.
 - Ne jamais forcer un push ni réécrire une branche partagée sans autorisation explicite.
-- Ne jamais pousser directement vers la branche principale.
+- Demander une autorisation explicite avant tout push vers `main` ou `master`.
+- Demander une autorisation explicite avant tout merge important présentant un risque de casse ; les merges ordinaires et à faible risque sur une branche de travail sont autorisés sans confirmation supplémentaire.
 
 ## Validation avant livraison
 
@@ -86,4 +88,4 @@ Statuts autorisés : `pending`, `in_progress`, `blocked`, `ready_for_review`, `c
 5. Tester progressivement puis effectuer la validation de livraison.
 6. Examiner le diff, les secrets et les fichiers parasites.
 7. Mettre à jour le suivi et laisser une prochaine action immédiatement exploitable.
-8. Committer si le lot est terminé ; pousser seulement si cela est autorisé.
+8. Committer si le lot est terminé et pousser sa branche de travail sur `origin` ; demander une autorisation uniquement dans les cas sensibles définis par les règles Git.
