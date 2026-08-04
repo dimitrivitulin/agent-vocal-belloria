@@ -1,39 +1,41 @@
-# BELL-023 — Validation du premier passage réel
+# BELL-024 — Reprise CRM des formulaires récents
 
 Statut: completed
-Branche: `codex/bell-023-validation-premier-passage-reel`
+Branche: `codex/bell-024-reprise-crm-formulaires-recents`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Surveiller le premier passage planifié contenant un nouveau candidat réel et confirmer que le flux Gmail vers la base Notion de test respecte le contrat validé, sans envoyer d'email ni de notification Telegram.
+Recenser les formulaires commerciaux reçus sur Gmail sur les deux derniers mois et mettre à jour le CRM Notion opérationnel pour les événements à venir comme pour les prestations déjà réalisées.
 
 ## Critères de réussite
 
-- Un nouveau candidat réel est identifié après son traitement planifié.
-- La qualification, la fiche Notion créée ou actualisée et l'état Gmail concordent.
-- Aucun doublon ni mutation du CRM historique n'est observé.
-- Aucun email ni compte rendu Telegram n'est envoyé pendant la validation.
-- Les éventuels écarts sont documentés et corrigés dans un lot borné.
-- Les validations locales, `git diff --check` et l'examen du diff réussissent.
+- Tous les formulaires Tally des deux derniers mois sont recensés et lus.
+- Chaque demande est rapprochée d'une fiche existante ou créée sans doublon dans `Demandes & événements`.
+- Les événements futurs portent une étape et une prochaine action cohérentes avec les échanges Gmail disponibles.
+- Les prestations passées et effectivement réalisées sont identifiées comme terminées ; les demandes perdues ou annulées ne sont pas assimilées à des prestations réalisées.
+- Les identifiants techniques et liens Gmail permettent de retracer chaque mise à jour.
+- Aucun email, message Telegram ou mutation du CRM historique n'est effectué.
+- Le résultat est contrôlé dans Notion et le suivi local est validé puis publié.
 
 ## Fichiers concernés
 
 - `CURRENT_TASK.md`
 - `docs/TASKS.md`
-- `docs/chatgpt-work-automation.md` uniquement si le passage réel révèle un écart documentaire
-- fichiers d'automatisation ou tests uniquement si le passage réel révèle un défaut
+- `docs/PROJECT_CONTEXT.md` uniquement si l'état stable évolue
 
 ## État vérifié
 
-- BELL-022 est terminé, propre et publié sur `origin`.
-- La tâche `Passage Belloria automatisé` est active toutes les heures.
-- Le premier candidat réel observé est une soumission Tally reçue le 2026-08-04 pour un anniversaire de 25 convives le 2026-08-28.
-- Gmail porte les labels `Belloria/Candidat`, `Belloria/Source/Tally` et `Belloria/Etat/Traite`, sans état d'erreur ou de revue.
-- Une seule fiche correspondante existe dans la base Notion de test ; ses données métier, son lien Gmail et son identifiant technique concordent.
-- La fiche est à l'étape `Devis à préparer`, avec l'action de préparer un devis pour 25 convives.
-- Aucun email ni compte rendu Telegram n'a été envoyé pendant cette validation en lecture seule.
+- Le CRM cible est la base Notion opérationnelle `Demandes & événements`.
+- La recherche Gmail couvre les formulaires Tally reçus après le 2026-06-03 et jusqu'au 2026-08-04 inclus.
+- 88 formulaires Tally ont été lus et regroupés en 78 demandes dédupliquées par email et date d'événement.
+- Les 88 identifiants de message sont présents exactement une fois dans le CRM, sans manque ni doublon.
+- 75 fiches Tally ont été créées, deux existaient déjà et la fiche Anaëlle a été consolidée avec sa demande Tally.
+- Six fiches clients hors formulaires ont été ajoutées d'après des factures, paiements ou échanges opérationnels vérifiables.
+- Le CRM contient désormais 84 événements : 4 terminés, 3 confirmés, 22 avec devis envoyé, 3 perdus et 20 marqués pour revue humaine.
+- Les événements passés sans preuve d'exécution restent `À qualifier` ; ils ne sont pas classés arbitrairement comme réalisés.
+- Aucun email, message Telegram ou changement du CRM historique n'a été effectué.
 
 ## Prochaine action
 
-Ouvrir le prochain lot Belloria et définir l'étape opérationnelle suivant la validation du flux réel.
+Traiter les actions urgentes du CRM, en commençant par les événements proches et les fiches marquées pour revue humaine.
