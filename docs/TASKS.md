@@ -12,9 +12,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Terminé lorsque** l'agent peut recommander une prestation et expliquer son calcul sans inventer de prix, de disponibilité ni de contenu.
   Référentiel Notion de 26 fiches livré à partir du catalogue, des devis, des conversations, des factures et du CRM. Cocktail, Menu et Brunch sont validés ; winners, upsells, incompatibilité Charcu/Cocktail, écarts catalogue et règles suspendues sont tracés.
 
-- [ ] **BELL-028 — Contexte prospect 360** (`pending`)
+- [x] **BELL-028 — Contexte prospect 360** (`completed`)
   Réunir à la demande le formulaire, les échanges Gmail, la fiche CRM, les devis réellement envoyés, les factures `CLIENTS` 2026/2027, les événements confirmés et les conflits de date. Conserver la provenance, la fraîcheur et les incertitudes de chaque fait.
   **Terminé lorsque** un résumé unique restitue correctement identité, événement, besoin, budget, historique, engagement, situation financière et prochaine échéance sans mélanger deux soumissions Tally.
+  Constructeur de faits sourcés livré avec contradictions, inconnues, chronologie et preuves financières strictes. Le cas réel de plusieurs clients Tally dans un même fil Gmail est couvert par la clé `messageId`.
 
 - [ ] **BELL-029 — Moteur de conversion et prochaine meilleure action** (`pending`)
   Évaluer adéquation, urgence, complétude, engagement et valeur ; recommander l'offre, les questions manquantes, les options utiles, la prochaine action et un brouillon personnalisé. Rendre les raisons et les incertitudes visibles.

@@ -1,35 +1,27 @@
-# BELL-027 — Référentiel commercial Belloria
+# BELL-028 — Contexte prospect 360
 
 Statut: completed
-Branche: `codex/bell-027-referentiel-commercial`
-Dernière mise à jour: 2026-08-04
+Branche: `codex/bell-028-contexte-prospect-360`
+Dernière mise à jour: 2026-08-05
 
 ## Objectif
 
-Construire une source de vérité versionnée des prestations Belloria, fondée sur le catalogue, les devis, les échanges clients, les factures et le CRM, afin que l'agent recommande sans inventer.
+Construire un dossier prospect court, sourcé et déterministe à partir du CRM, des soumissions Gmail, des échanges, des devis, des factures et du planning confirmé, sans fusionner deux soumissions Tally.
 
 ## Résultat livré
 
-- Base Notion `Référentiel commercial Belloria` portée à 26 fiches et trois vues opérationnelles.
-- Trois offres cœur validées : Cocktail 18 €/pers., Menu 25 €/pers. et Brunch 25 €/pers.
-- Upsells réellement payés identifiés : mignardises, Salad'Bello, Bar de bienvenue, Cookie'Bello et donuts.
-- Incompatibilité bloquante enregistrée dans les deux sens : Bar Charcu'Bello et Grazing Table Cocktail.
-- Deux packs catalogue incohérents suspendus et règles logistiques maintenues en validation humaine.
-- Rapport Notion et documentation locale alignés avec la hiérarchie des preuves.
-
-## Corrections critiques
-
-- Le Menu affiché à 55 € dans le catalogue vaut réellement 25 € TTC/personne.
-- Plusieurs pieds de page du catalogue affichent `06 26 28 04 22` au lieu de `06 25 28 04 22`.
-- Le minimum générique de 30 personnes et les frais logistiques à partir de 90 € ne sont pas appliqués automatiquement : les dossiers réels les contredisent ou ne permettent pas leur calcul.
+- Constructeur déterministe de faits sourcés avec fraîcheur, autorité et contradictions conservées.
+- Séparation stricte des soumissions Tally par `messageId` ; les autres emails utilisent le fil lorsqu'il existe.
+- Synthèse des faits, chronologie, inconnues, avertissements et quatre niveaux financiers distincts.
+- Contrat documenté dans `docs/contexte-prospect-360.md`.
+- Cas réel Gmail multi-soumissions et schéma CRM contrôlés en lecture seule.
 
 ## Validation
 
-- Catalogue de 17 pages inspecté visuellement et textuellement.
-- Devis, conversations et factures finales rapprochés pour les dossiers représentatifs.
-- Événements confirmés ou terminés contrôlés dans le CRM.
-- Les offres non prouvées restent `À valider` ; les packs incohérents restent `Suspendu`.
+- 47 tests unitaires réussis, dont 7 dédiés au contexte prospect.
+- `git diff --check` réussi ; périmètre et secrets contrôlés.
+- Le fil Gmail réel `19fc764f1e53f945` contient plusieurs clients Tally distincts, correctement séparables par message.
 
 ## Prochaine action
 
-Exécuter `BELL-028 — Contexte prospect 360` en utilisant uniquement les fiches `Validé` du référentiel.
+Exécuter `BELL-029 — Moteur de conversion et prochaine meilleure action` sur ce contrat de contexte et les seules fiches commerciales `Validé`.
