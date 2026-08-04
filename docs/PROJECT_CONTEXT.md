@@ -61,4 +61,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase de prototypage. Le canal Telegram privé est actif sur le Worker Cloudflare avec D1 pour l'idempotence et Workers AI pour les vocaux. Le MCP déployé est connecté à ChatGPT Work par OAuth 2.1 avec PKCE ; ses quatre actions ont été découvertes et un passage fictif de lecture puis clôture de commande a été validé sans envoi externe. La prochaine étape est de configurer le passage planifié sur les sources Gmail et Notion de test.
+Le projet est en phase de prototypage. Le canal Telegram privé est actif sur le Worker Cloudflare avec D1 pour l'idempotence et Workers AI pour les vocaux. Le MCP déployé est connecté à ChatGPT Work par OAuth 2.1 avec PKCE. Les filtres Gmail Belloria et la synchronisation vers la base Notion de test sont validés ; la tâche `Passage Belloria automatisé` est active toutes les heures, cadence minimale supportée par le planificateur ChatGPT. Son premier passage sans candidat ni commande s'est terminé sans notification.

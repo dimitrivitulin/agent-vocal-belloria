@@ -1,6 +1,6 @@
 # BELL-022 — Passage planifié Gmail vers Notion
 
-Statut: ready_for_review
+Statut: completed
 Branche: `codex/bell-022-passage-planifie-gmail-notion`
 Dernière mise à jour: 2026-08-04
 
@@ -34,8 +34,9 @@ Valider puis activer un passage planifié sûr entre la boîte Gmail Belloria et
 - Les soumissions Tally utilisent désormais `messageId` comme clé d'opportunité afin d'éviter la fusion de clients regroupés dans un même fil Gmail.
 - Aucun email ni compte rendu Telegram n'a été envoyé.
 - Les quatre règles techniques de `tools/belloria-gmail-filters.xml` sont importées et actives dans `belloriaevent@gmail.com`.
-- La tâche ChatGPT a été soumise en mode Work avec la cadence et les garde-fous complets, mais elle n'apparaît pas dans la liste des tâches planifiées actives.
+- La tâche `Passage Belloria automatisé` est active dans ChatGPT Work avec les garde-fous complets et une cadence horaire, minimum accepté par le planificateur.
+- Le premier passage s'est terminé sans candidat ni commande et n'a produit aucune notification.
 
 ## Prochaine action
 
-Reprendre la conversation `Passage Belloria automatisé` dans ChatGPT Work et obtenir la création effective d'une tâche active toutes les quinze minutes, puis clôturer le lot.
+Ouvrir le prochain lot Belloria et surveiller le premier passage contenant un nouveau candidat réel.

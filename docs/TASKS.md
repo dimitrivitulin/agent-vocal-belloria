@@ -2,8 +2,8 @@
 
 ## À faire — canal Telegram
 
-- [ ] **BELL-022 — Passage planifié Gmail vers Notion** (`ready_for_review`)
-  Échantillon, rejeu et filtres Gmail validés ; tâche Work soumise mais absente de la liste des tâches planifiées actives.
+- [x] **BELL-022 — Passage planifié Gmail vers Notion** (`completed`)
+  Filtres Gmail, passage Notion et rejeu validés ; tâche ChatGPT Work active toutes les heures, cadence minimale supportée.
 - [x] **BELL-021 — Synchronisation GitHub complète** (`completed`)
   Publication de toutes les branches locales et règle durable imposant la représentativité local/GitHub.
 - [x] **BELL-020 — CRM Belloria opérationnel** (`completed`)
