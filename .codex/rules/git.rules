@@ -1,0 +1,24 @@
+# Autorise les opérations Git courantes du projet sans fenêtre d'approbation.
+# Les restrictions métier (push vers main/master et merge risqué) restent
+# imposées par AGENTS.md et nécessitent l'accord explicite de l'utilisateur.
+
+prefix_rule(
+    pattern = ["git", "commit"],
+    decision = "allow",
+    justification = "Les commits locaux Belloria sont autorisés sans confirmation.",
+    match = [
+        "git commit -m docs: clarifie les règles Git",
+        "git commit --amend --no-edit",
+    ],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "allow",
+    justification = "Les pushs des branches de travail Belloria sont autorisés sans confirmation.",
+    match = [
+        "git push",
+        "git push origin codex/bell-021-synchronisation-github",
+        "git push -u origin codex/bell-021-synchronisation-github",
+    ],
+)
