@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Automatiser le traitement des demandes commerciales reçues sur Gmail, maintenir le CRM Belloria dans Notion et permettre le pilotage ainsi que les comptes rendus depuis un bot Telegram privé.
+Automatiser le traitement des demandes commerciales reçues sur Gmail, maintenir le CRM Belloria dans Notion et fournir un agent commercial privé piloté depuis Telegram. Cet agent doit reconstruire le contexte complet d'un prospect, recommander la meilleure action commerciale et préparer son exécution à partir d'une connaissance Belloria validée.
 
 Le volume attendu est faible : quelques demandes de devis par jour. Le système doit rester simple, économique, traçable et facile à reprendre.
 
@@ -15,6 +15,8 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 - Envoyer un compte rendu sur Telegram.
 - Recevoir des commandes Telegram en texte ou en vocal.
 - Préparer les réponses Gmail et demander une validation avant envoi.
+- Construire un dossier prospect 360 à partir du formulaire, de Gmail, du CRM, des devis réellement envoyés, des factures et du planning confirmé.
+- Recommander l'offre, les questions, la relance ou l'action qui maximise la conversion sans inventer de prix, de contenu ou de disponibilité.
 
 ## Architecture retenue à ce stade
 
@@ -22,6 +24,9 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 - Une tâche ChatGPT Work cloud consulte périodiquement les éléments à traiter.
 - Notion constitue la source de vérité du CRM métier.
 - Le canal mobile actif est un bot Telegram privé sur Cloudflare Workers, limité à un seul identifiant de chat Belloria.
+- Telegram est l'interface conversationnelle cible de l'agent commercial ; le passage horaire ChatGPT Work reste un mécanisme de synchronisation et de reprise, pas la latence cible des commandes interactives.
+- Les recommandations s'appuient sur deux contextes reconstruits : un dossier prospect 360 sourcé et un référentiel commercial Belloria versionné et validé.
+- L'agent peut lire les sources autorisées mais ne modifie que le CRM Belloria dans Notion.
 - D1 dédoublonne les commandes ; Workers AI transcrit les vocaux sans conserver les fichiers audio.
 - La voie WhatsApp Cloud API officielle est abandonnée depuis le 2026-08-03 ; aucune demande d'examen Meta ni configuration de secrets ne doit être reprise.
 - Le code Cloud API et la route Meta sont retirés du Worker actif ; les acquis du prototype restent dans l'historique Git et la documentation gelée.
@@ -61,4 +66,4 @@ Les emails promotionnels, notifications sociales et factures techniques doivent 
 
 ## État actuel
 
-Le projet est en phase de prototypage. Le canal Telegram privé est actif sur le Worker Cloudflare avec D1 pour l'idempotence et Workers AI pour les vocaux. Le MCP déployé est connecté à ChatGPT Work par OAuth 2.1 avec PKCE. Les filtres Gmail Belloria et la synchronisation vers la base Notion de test sont validés ; la tâche `Passage Belloria automatisé` est active toutes les heures, cadence minimale supportée par le planificateur ChatGPT. Le CRM opérationnel contient les formulaires Tally des deux derniers mois, dédupliqués et rapprochés des échanges Gmail ; ses vues séparent les clients en cours des clients anciens, et toute date passée non honorée est classée comme perdue.
+Le projet est en phase de prototypage avancé. Le canal Telegram privé est actif sur le Worker Cloudflare avec D1 pour l'idempotence et Workers AI pour les vocaux. Le MCP déployé est connecté à ChatGPT Work par OAuth 2.1 avec PKCE. Les filtres Gmail et la synchronisation Notion sont validés ; la tâche `Passage Belloria automatisé` est active toutes les heures. Le CRM opérationnel contient les formulaires Tally récents, dédupliqués et rapprochés des échanges Gmail ; ses vues séparent les clients en cours des clients anciens, les dates passées non honorées sont perdues, et la vue `🔥 À traiter` expose les informations nécessaires à l'action. La prochaine phase construit le référentiel commercial, le contexte prospect 360 puis le moteur de conversion piloté depuis Telegram.
