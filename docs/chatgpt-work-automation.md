@@ -4,7 +4,7 @@
 
 La tâche cloud s'exécute toutes les quinze minutes, dans le fuseau `Europe/Paris`, avec une seule exécution active. Elle traite au maximum 20 messages candidats par passage, du plus ancien au plus récent. Elle ne lit pas les pièces jointes et n'envoie jamais d'email.
 
-L'activation réelle reste bloquée jusqu'à la configuration des connecteurs Gmail et Notion, à la connexion OAuth du MCP Belloria dans ChatGPT, et à un passage en lecture seule validé sur des messages anonymisés. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
+L'activation réelle reste bloquée jusqu'à la création des labels Gmail Belloria et à un passage en lecture seule validé sur des messages anonymisés. Le MCP Belloria est déjà connecté par OAuth dans ChatGPT. La cible de test est la base vide `Demandes & événements` décrite dans `docs/notion-crm-operational.md`; le CRM historique ne doit pas être muté. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
 
 ## Application MCP Belloria
 

@@ -1,47 +1,42 @@
-# BELL-018 — Connexion MCP à ChatGPT Work
+# BELL-020 — CRM Belloria opérationnel
 
 Statut: completed
-Branche: `codex/bell-018-connexion-mcp-chatgpt-work`
+Branche: `codex/bell-020-crm-belloria-operationnel`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Rendre le MCP Telegram déployé compatible avec l'authentification OAuth exigée par les applications personnalisées ChatGPT, puis valider sa découverte et un premier passage fictif sans appel Gmail ou Notion réel.
+Créer un nouveau CRM Notion séparé, adapté aux demandes réellement observées dans Gmail et centré sur les actions commerciales utiles à Belloria.
 
 ## Critères de réussite
 
-- Le Worker expose le flux OAuth 2.1 attendu par MCP avec PKCE et découverte standard.
-- L'autorisation reste limitée au propriétaire Belloria et aucun secret n'est ajouté à Git ou aux journaux.
-- Les routes Telegram existantes, l'idempotence et la transcription restent inchangées.
-- Les outils MCP sont découverts par ChatGPT après authentification.
-- Un passage fictif lit puis termine une commande de test sans envoi Gmail/Notion réel.
-- Les tests, `git diff --check` et l'examen du diff réussissent.
+- Un échantillon Tally, Mariages.net, email direct, devis, modification et refus est analysé en lecture seule.
+- Le CRM réel existant reste intact.
+- Une demande ou un événement est suivi sur une seule ligne, enrichie par les messages du même fil Gmail.
+- Le pipeline distingue réponse, qualification, devis, modification, relance, acompte, confirmation, perte et fin de prestation.
+- Des vues immédiatement utiles présentent les actions, le pipeline, le calendrier et les prestations confirmées.
+- Aucun email n'est envoyé et aucune donnée client réelle n'est copiée pendant la validation.
+- La documentation, `git diff --check` et l'examen du diff réussissent.
 
 ## Fichiers concernés
 
-- `worker/src/index.js`
-- `worker/test/worker.test.js`
-- `wrangler.jsonc`
-- `package.json`
-- `.dev.vars.example`
+- `docs/notion-crm-operational.md`
 - `docs/chatgpt-work-automation.md`
-- `docs/mcp-server.md`
-- `CURRENT_TASK.md`
 - `docs/TASKS.md`
+- `CURRENT_TASK.md`
 
 ## Prochaine action
 
-Ouvrir le lot suivant pour configurer le passage planifié ChatGPT Work sur les sources Gmail et Notion de test.
+Faire valider le CRM vide dans Notion, puis ouvrir un lot séparé pour importer un échantillon borné et connecter l'automatisation Gmail.
 
 ## Résultat
 
-Le MCP Belloria déployé est connecté à ChatGPT Work par OAuth 2.1 avec PKCE. ChatGPT découvre les quatre actions et a lu puis terminé une commande Telegram fictive, sans envoyer de message Telegram ni contacter Gmail ou Notion.
+Le nouveau CRM `CRM Belloria — Pilotage commercial` est créé séparément dans Notion avec la base `Demandes & événements` et quatre vues opérationnelles. Le modèle provient des flux Gmail réels observés ; l'ancien CRM et les emails restent inchangés.
 
 ## Validations effectuées
 
-- Découverte OAuth, enregistrement dynamique, autorisation, échange de jeton et métadonnées MCP validés sur le Worker déployé.
-- Accès MCP non authentifié refusé ; initialisation, notifications MCP et `tools/list` validés.
-- Les quatre actions Belloria sont visibles dans ChatGPT Work.
-- `belloria_list_commands(limit: 10)` a retourné la commande fictive `602781223` une seule fois.
-- `belloria_complete_command` avec confirmation explicite a retourné `{ "completed": true }`.
-- Aucun message Telegram envoyé et aucun appel Gmail ou Notion réel effectué.
+- Échantillons Gmail Tally, Mariages.net, email direct, devis, modification, acompte attendu et refus lus sans mutation.
+- Schéma et vues du nouveau CRM relus via Notion après création.
+- Requête de contrôle : base vide, aucune donnée client importée.
+- Ancien CRM conservé sans modification.
+- `git diff --check`, examen du périmètre et recherche de secrets réussis.

@@ -2,6 +2,8 @@
 
 ## À faire — canal Telegram
 
+- [x] **BELL-020 — CRM Belloria opérationnel** (`completed`)
+  Nouveau CRM Notion séparé, conçu d'après les demandes Gmail réelles et centré sur les actions commerciales.
 - [x] **BELL-018 — Connexion MCP à ChatGPT Work** (`completed`)
   Authentification OAuth MCP, découverte par ChatGPT et premier passage fictif sans mutation Gmail/Notion réelle.
 - [ ] **BELL-016 — Bot Telegram privé sur Cloudflare** (`ready_for_review`)
