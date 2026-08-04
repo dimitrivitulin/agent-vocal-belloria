@@ -1,22 +1,21 @@
-# BELL-024 — Reprise CRM des formulaires récents
+# BELL-025 — Séparation clients actifs et anciens
 
 Statut: completed
-Branche: `codex/bell-024-reprise-crm-formulaires-recents`
+Branche: `codex/bell-025-separation-clients-actifs-anciens`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Recenser les formulaires commerciaux reçus sur Gmail sur les deux derniers mois et mettre à jour le CRM Notion opérationnel pour les événements à venir comme pour les prestations déjà réalisées.
+Rendre le CRM Notion immédiatement lisible en classant comme perdu tout événement passé non honoré et en séparant les clients en cours des clients anciens.
 
 ## Critères de réussite
 
-- Tous les formulaires Tally des deux derniers mois sont recensés et lus.
-- Chaque demande est rapprochée d'une fiche existante ou créée sans doublon dans `Demandes & événements`.
-- Les événements futurs portent une étape et une prochaine action cohérentes avec les échanges Gmail disponibles.
-- Les prestations passées et effectivement réalisées sont identifiées comme terminées ; les demandes perdues ou annulées ne sont pas assimilées à des prestations réalisées.
-- Les identifiants techniques et liens Gmail permettent de retracer chaque mise à jour.
-- Aucun email, message Telegram ou mutation du CRM historique n'est effectué.
-- Le résultat est contrôlé dans Notion et le suivi local est validé puis publié.
+- Toute fiche dont la date est antérieure au 2026-08-04 est `Perdu`, sauf preuve de prestation réalisée (`Terminé`).
+- Les prestations réalisées restent `Terminé` et ne sont pas mélangées aux pertes.
+- Une vue `Clients en cours` affiche uniquement les événements futurs non perdus et non terminés.
+- Une vue `Clients anciens` affiche les fiches `Perdu` ou `Terminé`.
+- Les prochaines actions et indicateurs de revue sont cohérents avec le nouveau classement.
+- Le résultat est vérifié dans Notion et le suivi local est validé puis publié.
 
 ## Fichiers concernés
 
@@ -24,18 +23,14 @@ Recenser les formulaires commerciaux reçus sur Gmail sur les deux derniers mois
 - `docs/TASKS.md`
 - `docs/PROJECT_CONTEXT.md` uniquement si l'état stable évolue
 
-## État vérifié
-
-- Le CRM cible est la base Notion opérationnelle `Demandes & événements`.
-- La recherche Gmail couvre les formulaires Tally reçus après le 2026-06-03 et jusqu'au 2026-08-04 inclus.
-- 88 formulaires Tally ont été lus et regroupés en 78 demandes dédupliquées par email et date d'événement.
-- Les 88 identifiants de message sont présents exactement une fois dans le CRM, sans manque ni doublon.
-- 75 fiches Tally ont été créées, deux existaient déjà et la fiche Anaëlle a été consolidée avec sa demande Tally.
-- Six fiches clients hors formulaires ont été ajoutées d'après des factures, paiements ou échanges opérationnels vérifiables.
-- Le CRM contient désormais 84 événements : 4 terminés, 3 confirmés, 22 avec devis envoyé, 3 perdus et 20 marqués pour revue humaine.
-- Les événements passés sans preuve d'exécution restent `À qualifier` ; ils ne sont pas classés arbitrairement comme réalisés.
-- Aucun email, message Telegram ou changement du CRM historique n'a été effectué.
-
 ## Prochaine action
 
-Traiter les actions urgentes du CRM, en commençant par les événements proches et les fiches marquées pour revue humaine.
+Traiter les clients en cours depuis la vue dédiée, par date d'événement et priorité.
+
+## État vérifié
+
+- 20 événements passés non honorés ont été reclassés de `À qualifier` ou `Devis envoyé` vers `Perdu`.
+- Le CRM contient 57 clients en cours, 23 fiches perdues et 4 prestations terminées.
+- Aucun événement antérieur au 2026-08-04 ne reste actif : le contrôle retourne zéro anomalie.
+- La vue `Clients en cours` exclut `Perdu` et `Terminé`, filtre les dates à partir du 2026-08-04 et trie par date croissante.
+- La vue `Clients anciens` regroupe `Perdu` et `Terminé` et trie par date décroissante.

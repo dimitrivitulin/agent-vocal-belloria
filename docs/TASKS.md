@@ -2,6 +2,8 @@
 
 ## À faire — canal Telegram
 
+- [x] **BELL-025 — Séparation clients actifs et anciens** (`completed`)
+  Dates passées non honorées classées en perdu ; vues `Clients en cours` et `Clients anciens` créées et vérifiées.
 - [x] **BELL-024 — Reprise CRM des formulaires récents** (`completed`)
   88 formulaires dédupliqués et tracés dans 78 demandes ; clients confirmés et prestations prouvées ajoutés au CRM opérationnel.
 - [x] **BELL-023 — Validation du premier passage réel** (`completed`)
