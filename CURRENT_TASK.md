@@ -1,45 +1,35 @@
 # BELL-027 — Référentiel commercial Belloria
 
-Statut: ready_for_review
+Statut: completed
 Branche: `codex/bell-027-referentiel-commercial`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Construire une source de vérité versionnée des prestations Belloria afin que l'agent puisse recommander une offre sans inventer de prix, de contenu ni de capacité.
+Construire une source de vérité versionnée des prestations Belloria, fondée sur le catalogue, les devis, les échanges clients, les factures et le CRM, afin que l'agent recommande sans inventer.
 
-## Critères de réussite
+## Résultat livré
 
-- Les prestations ont une fiche structurée, une source, une date de preuve et un statut de validation.
-- Seules les fiches `Validé` sont utilisables comme règle commerciale courante.
-- Les prix historiques sont distingués des tarifs validés.
-- Les inconnues opérationnelles sont explicites et bloquent toute promesse automatique.
-- Belloria peut valider les premières fiches dans Notion sans modifier le code.
+- Base Notion `Référentiel commercial Belloria` portée à 26 fiches et trois vues opérationnelles.
+- Trois offres cœur validées : Cocktail 18 €/pers., Menu 25 €/pers. et Brunch 25 €/pers.
+- Upsells réellement payés identifiés : mignardises, Salad'Bello, Bar de bienvenue, Cookie'Bello et donuts.
+- Incompatibilité bloquante enregistrée dans les deux sens : Bar Charcu'Bello et Grazing Table Cocktail.
+- Deux packs catalogue incohérents suspendus et règles logistiques maintenues en validation humaine.
+- Rapport Notion et documentation locale alignés avec la hiérarchie des preuves.
 
-## Fichiers concernés
+## Corrections critiques
 
-- `CURRENT_TASK.md`
-- `docs/TASKS.md`
-- `docs/PROJECT_CONTEXT.md`
-- `docs/referentiel-commercial.md`
+- Le Menu affiché à 55 € dans le catalogue vaut réellement 25 € TTC/personne.
+- Plusieurs pieds de page du catalogue affichent `06 26 28 04 22` au lieu de `06 25 28 04 22`.
+- Le minimum générique de 30 personnes et les frais logistiques à partir de 90 € ne sont pas appliqués automatiquement : les dossiers réels les contredisent ou ne permettent pas leur calcul.
 
-## Réalisation
+## Validation
 
-- Base Notion `Référentiel commercial Belloria` créée sous la page Belloria.
-- Six fiches sourcées créées : deux grazing tables, deux ateliers, brunch et plateaux.
-- Quatre prix datés du 31 juillet 2026 sont enregistrés en `À valider`, jamais comme tarifs garantis.
-- Composition, logistique connue, associations et informations manquantes sont tracées dans chaque fiche.
-
-## Validation humaine requise
-
-Valider ou corriger les prix, minimums, capacités, délais, frais logistiques, règles commerciales et limites alimentaires. Renseigner `Validé par` et `Dernière validation`, puis passer chaque fiche approuvée à `Validé`.
+- Catalogue de 17 pages inspecté visuellement et textuellement.
+- Devis, conversations et factures finales rapprochés pour les dossiers représentatifs.
+- Événements confirmés ou terminés contrôlés dans le CRM.
+- Les offres non prouvées restent `À valider` ; les packs incohérents restent `Suspendu`.
 
 ## Prochaine action
 
-Après validation Belloria des fiches, clôturer `BELL-027` puis exécuter `BELL-028 — Contexte prospect 360`.
-
-## État vérifié
-
-- La base et ses six fiches sont lisibles dans Notion.
-- Toutes les données non approuvées restent en `À valider`.
-- Aucun email n'a été envoyé et aucun CRM prospect n'a été modifié.
+Exécuter `BELL-028 — Contexte prospect 360` en utilisant uniquement les fiches `Validé` du référentiel.
