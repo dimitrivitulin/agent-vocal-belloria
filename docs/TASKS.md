@@ -2,6 +2,8 @@
 
 ## À faire — canal Telegram
 
+- [x] **BELL-023 — Validation du premier passage réel** (`completed`)
+  Premier candidat Tally réel traité sans doublon ; labels Gmail, fiche Notion de test et identifiants techniques concordants.
 - [x] **BELL-022 — Passage planifié Gmail vers Notion** (`completed`)
   Filtres Gmail, passage Notion et rejeu validés ; tâche ChatGPT Work active toutes les heures, cadence minimale supportée.
 - [x] **BELL-021 — Synchronisation GitHub complète** (`completed`)
