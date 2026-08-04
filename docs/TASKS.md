@@ -2,7 +2,7 @@
 
 ## À faire — canal Telegram
 
-- [ ] **BELL-021 — Synchronisation GitHub complète** (`in_progress`)
+- [x] **BELL-021 — Synchronisation GitHub complète** (`completed`)
   Publication de toutes les branches locales et règle durable imposant la représentativité local/GitHub.
 - [x] **BELL-020 — CRM Belloria opérationnel** (`completed`)
   Nouveau CRM Notion séparé, conçu d'après les demandes Gmail réelles et centré sur les actions commerciales.
