@@ -17,9 +17,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Terminé lorsque** un résumé unique restitue correctement identité, événement, besoin, budget, historique, engagement, situation financière et prochaine échéance sans mélanger deux soumissions Tally.
   Constructeur de faits sourcés livré avec contradictions, inconnues, chronologie et preuves financières strictes. Le cas réel de plusieurs clients Tally dans un même fil Gmail est couvert par la clé `messageId`.
 
-- [ ] **BELL-029 — Moteur de conversion et prochaine meilleure action** (`pending`)
+- [x] **BELL-029 — Moteur de conversion et prochaine meilleure action** (`completed`)
   Évaluer adéquation, urgence, complétude, engagement et valeur ; recommander l'offre, les questions manquantes, les options utiles, la prochaine action et un brouillon personnalisé. Rendre les raisons et les incertitudes visibles.
   **Terminé lorsque** les scénarios représentatifs Belloria produisent une recommandation fondée sur le contexte et le référentiel, persuasive mais exacte, avec escalade humaine en cas de doute.
+  Moteur déterministe livré avec diagnostic multi-dimensionnel, offres validées uniquement, options contextuelles limitées, questions bloquantes, actions, brouillons sûrs et escalade humaine explicite.
 
 - [ ] **BELL-030 — Agent conversationnel Telegram** (`pending`)
   Permettre en texte ou vocal : « mes priorités », « résume ce prospect », « que lui proposer ? », « prépare une réponse », « prépare le devis », « relance-le », « mon planning du jour » et « où en est le CA ? ». Réduire la latence cible à moins de deux minutes ; conserver le passage horaire comme reprise de secours.
