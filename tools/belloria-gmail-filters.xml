@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>
+  <title>Mail Filters</title>
+  <entry>
+    <category term='filter'/><title>Mail Filter</title><content/>
+    <apps:property name='from' value='notifications@tally.so'/>
+    <apps:property name='subject' value='New Tally Form Submission for Devis express'/>
+    <apps:property name='label' value='Belloria/Candidat'/>
+  </entry>
+  <entry>
+    <category term='filter'/><title>Mail Filter</title><content/>
+    <apps:property name='from' value='notifications@tally.so'/>
+    <apps:property name='subject' value='New Tally Form Submission for Devis express'/>
+    <apps:property name='label' value='Belloria/Source/Tally'/>
+  </entry>
+  <entry>
+    <category term='filter'/><title>Mail Filter</title><content/>
+    <apps:property name='from' value='info@mariages.net'/>
+    <apps:property name='subject' value="Demande d'information"/>
+    <apps:property name='label' value='Belloria/Candidat'/>
+  </entry>
+  <entry>
+    <category term='filter'/><title>Mail Filter</title><content/>
+    <apps:property name='from' value='info@mariages.net'/>
+    <apps:property name='subject' value="Demande d'information"/>
+    <apps:property name='label' value='Belloria/Source/Mariages.net'/>
+  </entry>
+</feed>

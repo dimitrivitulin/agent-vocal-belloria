@@ -16,7 +16,7 @@ Après le premier échange, le travail réel consiste à préparer ou envoyer un
 
 ## Unité de suivi
 
-Une ligne représente une demande ou un événement. Plusieurs messages du même fil Gmail enrichissent cette ligne ; ils ne créent pas plusieurs fiches. `Tech — ID fil Gmail` rapproche le fil et `Tech — IDs messages traités` empêche le rejeu d'un même message.
+Une ligne représente une demande ou un événement. Plusieurs messages du même fil Gmail enrichissent cette ligne ; ils ne créent pas plusieurs fiches. `Tech — ID fil Gmail` rapproche le fil et `Tech — IDs messages traités` empêche le rejeu d'un même message. Exception : une notification Tally utilise son `messageId` dans `Tech — ID fil Gmail`, car Gmail regroupe parfois des soumissions de clients distincts sous leur sujet identique.
 
 ## Pipeline
 

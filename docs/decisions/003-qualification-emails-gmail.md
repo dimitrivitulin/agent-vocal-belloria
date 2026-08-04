@@ -9,7 +9,7 @@ Gmail doit isoler quelques demandes commerciales par jour sans envoyer newslette
 
 ## Décision
 
-Les filtres Gmail constituent une file de candidats et attribuent une source lorsqu'elle est déterministe. L'automatisation traite chaque message séparément, utilise le `messageId` pour l'idempotence et le `threadId` pour rattacher l'échange à une opportunité. Les formulaires Tally reconnus sont parsés sans IA ; les emails libres sont qualifiés de manière structurée. Notion et son champ `Tech — IDs messages traités` sont l'autorité de succès ; les labels Gmail servent au routage et à l'observation.
+Les filtres Gmail constituent une file de candidats et attribuent une source lorsqu'elle est déterministe. L'automatisation traite chaque message séparément, utilise le `messageId` pour l'idempotence et le `threadId` pour rattacher l'échange à une opportunité. Une soumission Tally fait exception et utilise son `messageId` comme clé d'opportunité, car Gmail peut regrouper des clients distincts sous le même sujet. Les formulaires Tally reconnus sont parsés sans IA ; les emails libres sont qualifiés de manière structurée. Notion et son champ `Tech — IDs messages traités` sont l'autorité de succès ; les labels Gmail servent au routage et à l'observation.
 
 ## Conséquences
 

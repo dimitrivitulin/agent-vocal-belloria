@@ -4,7 +4,7 @@
 
 La tâche cloud s'exécute toutes les quinze minutes, dans le fuseau `Europe/Paris`, avec une seule exécution active. Elle traite au maximum 20 messages candidats par passage, du plus ancien au plus récent. Elle ne lit pas les pièces jointes et n'envoie jamais d'email.
 
-L'activation réelle reste bloquée jusqu'à la création des labels Gmail Belloria et à un passage en lecture seule validé sur des messages anonymisés. Le MCP Belloria est déjà connecté par OAuth dans ChatGPT. La cible de test est la base vide `Demandes & événements` décrite dans `docs/notion-crm-operational.md`; le CRM historique ne doit pas être muté. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
+Les labels et filtres Gmail Belloria sont actifs et le passage contrôlé est validé. La conversation `Passage Belloria automatisé` a été soumise en mode Work, mais aucune tâche correspondante n'apparaît encore dans la liste des tâches planifiées actives. Le MCP Belloria est connecté par OAuth dans ChatGPT. La cible de test est la base `Demandes & événements` décrite dans `docs/notion-crm-operational.md`; le CRM historique ne doit pas être muté. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
 
 ## Application MCP Belloria
 
@@ -19,7 +19,7 @@ Après traitement réussi ou décision explicite de ne pas agir, appeler `bellor
 ## Instruction de la tâche
 
 1. Lister les messages portant `Belloria/Candidat`, hors `Traite` et `A-revoir`; reprendre `Erreur` selon le compteur de tentatives et `En-cours` seulement si son verrou a expiré.
-2. Traiter chaque message comme une unité indépendante identifiée par `messageId`; utiliser `threadId` uniquement pour rapprocher l'opportunité.
+2. Traiter chaque message comme une unité indépendante identifiée par `messageId`; utiliser `threadId` pour rapprocher l'opportunité, mais utiliser `messageId` comme clé d'opportunité pour chaque soumission Tally.
 3. Remplacer l'état du message par `En-cours`, puis appliquer le contrat de `docs/gmail-qualification.md`.
 4. Pour `hors_perimetre`, ne pas appeler le CRM et appliquer `Traite`.
 5. Pour `a_revoir`, ne pas muter le CRM et appliquer `A-revoir` avec un motif concis.

@@ -1,40 +1,41 @@
-# BELL-021 — Synchronisation GitHub complète
+# BELL-022 — Passage planifié Gmail vers Notion
 
-Statut: completed
-Branche: `codex/bell-021-synchronisation-github`
+Statut: ready_for_review
+Branche: `codex/bell-022-passage-planifie-gmail-notion`
 Dernière mise à jour: 2026-08-04
 
 ## Objectif
 
-Rendre le dépôt GitHub représentatif de l'historique local Belloria et formaliser cette exigence comme règle durable du projet.
+Valider puis activer un passage planifié sûr entre la boîte Gmail Belloria et la base Notion de test `Demandes & événements`, sans toucher au CRM historique ni envoyer d'email.
 
 ## Critères de réussite
 
-- Toutes les branches locales `codex/bell-*` sont publiées sur `origin` avec leur commit de tête.
-- Chaque branche locale suit sa branche distante homonyme.
-- Le contexte stable et les règles de travail exigent la vérification des écarts local/distant avant livraison.
-- `Événementiel Pour Tous` est retiré des sources actives du contexte.
-- Aucun historique n'est réécrit et aucun push forcé n'est utilisé.
-- `git diff --check`, l'examen du diff et le contrôle final local/distant réussissent.
+- Les labels Gmail Belloria requis existent et leurs noms sont vérifiés.
+- Un passage en lecture seule sur des messages de test confirme la sélection et la qualification attendues.
+- Un passage contrôlé crée ou actualise uniquement des fiches dans la base Notion de test.
+- Le rejeu d'un message ne duplique pas la fiche et répare l'état Gmail.
+- Aucun email ni compte rendu Telegram n'est envoyé sans confirmation explicite.
+- Les validations locales, `git diff --check` et l'examen du diff réussissent.
 
 ## Fichiers concernés
 
-- `AGENTS.md`
-- `docs/PROJECT_CONTEXT.md`
-- `docs/TASKS.md`
 - `CURRENT_TASK.md`
+- `docs/TASKS.md`
+- `docs/chatgpt-work-automation.md`
+- fichiers d'automatisation ou tests uniquement si le passage réel révèle un écart au contrat existant
+
+## État vérifié
+
+- La base Notion de test `Demandes & événements` est accessible et son schéma contient les champs métier et techniques attendus.
+- Les huit labels Gmail actifs ont été créés et vérifiés.
+- Les signatures Tally et Mariages.net ont été validées en lecture seule sur l'historique ; les promotions Mariages.net restent exclues.
+- Deux demandes Tally et une demande Mariages.net ont produit trois fiches distinctes dans la base Notion de test, puis ont reçu l'état Gmail `Traite`.
+- Un rejeu contrôlé a retrouvé la fiche existante et réparé l'état Gmail sans créer de doublon.
+- Les soumissions Tally utilisent désormais `messageId` comme clé d'opportunité afin d'éviter la fusion de clients regroupés dans un même fil Gmail.
+- Aucun email ni compte rendu Telegram n'a été envoyé.
+- Les quatre règles techniques de `tools/belloria-gmail-filters.xml` sont importées et actives dans `belloriaevent@gmail.com`.
+- La tâche ChatGPT a été soumise en mode Work avec la cadence et les garde-fous complets, mais elle n'apparaît pas dans la liste des tâches planifiées actives.
 
 ## Prochaine action
 
-Ouvrir le prochain lot fonctionnel Belloria ; maintenir ensuite la vérification local/distant à chaque livraison.
-
-## Résultat
-
-Toutes les branches locales Belloria sont publiées sur `origin` et suivent leur branche distante homonyme. Le contexte stable et les règles de travail imposent désormais cette synchronisation ; la source inactive Événementiel Pour Tous est retirée du contexte.
-
-## Validations effectuées
-
-- Dépôt propre avant ouverture du lot.
-- Inventaire initial : seules BELL-001 et BELL-020 possédaient une branche distante connue localement.
-- `git push -u origin --all` réussi sans force ni réécriture.
-- Les 19 branches locales Belloria suivent désormais leur branche `origin` homonyme.
+Reprendre la conversation `Passage Belloria automatisé` dans ChatGPT Work et obtenir la création effective d'une tâche active toutes les quinze minutes, puis clôturer le lot.

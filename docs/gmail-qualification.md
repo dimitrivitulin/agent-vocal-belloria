@@ -7,7 +7,7 @@ Cette spécification décrit le routage des nouveaux messages vers l'automatisat
 ## Principes
 
 - Le filtre Gmail ne décide pas qu'un message est commercial : il constitue une file de candidats à faible bruit.
-- Un message est l'unité de travail et son `messageId` l'unité d'idempotence ; le `threadId` relie les échanges à une opportunité.
+- Un message est l'unité de travail et son `messageId` l'unité d'idempotence ; le `threadId` relie les échanges à une opportunité, sauf pour Tally où chaque soumission utilise son `messageId` comme clé d'opportunité.
 - Les formulaires Tally reconnus sont parsés de façon déterministe. Les emails libres sont qualifiés en langage naturel.
 - Un doute ne provoque ni suppression ni envoi : il mène à une revue humaine.
 - Les newsletters, notifications sociales et factures techniques sont écartées avant tout traitement IA.
@@ -21,7 +21,6 @@ Les noms visibles sont stables ; l'automatisation résout et conserve leurs iden
 | `Belloria/Candidat` | filtre Gmail | Message autorisé à entrer dans la file. |
 | `Belloria/Source/Tally` | filtre Gmail | Signature Tally reconnue. |
 | `Belloria/Source/Mariages.net` | filtre Gmail | Notification commerciale Mariages.net reconnue. |
-| `Belloria/Source/Evenementiel-pour-tous` | filtre Gmail | Notification commerciale Événementiel Pour Tous reconnue. |
 | `Belloria/Source/Email-direct` | qualification | Demande libre ou réponse d'un prospect. |
 | `Belloria/Etat/En-cours` | automatisation | Verrou temporaire de visibilité, jamais preuve d'idempotence. |
 | `Belloria/Etat/Traite` | automatisation | Mutation CRM terminée pour le message. |
@@ -43,14 +42,13 @@ Les valeurs entre chevrons sont des paramètres de configuration, pas des valeur
 
 | Filtre | Critère conceptuel | Action |
 | --- | --- | --- |
-| Tally | `from:(<expéditeurs-tally-validés>)` et signature de formulaire validée | `Candidat` + `Source/Tally` |
-| Mariages.net | `from:(<expéditeurs-mariages-validés>)` et motif de demande validé | `Candidat` + source correspondante |
-| Événementiel Pour Tous | `from:(<expéditeurs-ept-validés>)` et motif de demande validé | `Candidat` + source correspondante |
+| Tally | `from:notifications@tally.so subject:"New Tally Form Submission for Devis express"` | `Candidat` + `Source/Tally` |
+| Mariages.net | `from:info@mariages.net subject:"Demande d'information"` | `Candidat` + `Source/Mariages.net` |
 | Adresse commerciale | `deliveredto:<adresse-commerciale>` avec exclusions ci-dessous | `Candidat` |
 
 Exclusions initiales : `category:promotions`, `category:social`, notifications automatiques validées, factures et reçus techniques validés. Les critères négatifs Gmail ne constituent toutefois qu'une optimisation : l'automatisation revalide chaque **message**, car une recherche négative peut faire apparaître une conversation lorsqu'un autre message du fil correspond.
 
-Avant activation, chaque requête est exécutée comme recherche sur un historique représentatif. Les faux positifs et faux négatifs sont consignés ; un filtre de source n'est activé que si l'expéditeur **et** une signature stable sont confirmés. Gmail permet d'exporter les filtres : l'export XML devient la sauvegarde opérationnelle, hors de ce lot.
+Les requêtes Tally et Mariages.net ont été vérifiées en lecture seule le 2026-08-04 sur l'historique de la boîte Belloria. Les messages promotionnels Mariages.net proviennent notamment de `business@email.mariages.net` et restent exclus. Chaque nouvelle requête doit être testée sur un historique représentatif avant activation. L'import opérationnel des quatre règles techniques correspondant aux deux sources est conservé dans `tools/belloria-gmail-filters.xml`.
 
 ## Sélection de la file
 
@@ -61,7 +59,7 @@ Pour chaque résultat, récupérer le message complet et conserver au minimum :
 | Champ | Usage |
 | --- | --- |
 | `messageId` | clé d'idempotence Gmail |
-| `threadId` | rapprochement d'opportunité |
+| `threadId` | rapprochement d'opportunité hors Tally ; les notifications Tally de clients distincts peuvent partager un fil à cause de leur sujet identique |
 | `internalDate` | ordre et audit |
 | en-têtes `From`, `To`, `Delivered-To`, `Subject`, `Date`, `Message-ID`, `In-Reply-To` | source et contexte |
 | corps `text/plain`, sinon texte dérivé de `text/html` | extraction ou qualification |

@@ -6,7 +6,7 @@ Le module `belloria_notion` applique localement les règles de rapprochement et 
 
 1. Normaliser l'email, le téléphone E.164 et les textes.
 2. Rechercher le contact par email, puis téléphone ; refuser tout conflit.
-3. Rechercher l'opportunité par fil Gmail, puis par clé contact/date/type.
+3. Rechercher l'opportunité par fil Gmail, ou par `messageId` pour Tally, puis par clé contact/date/type.
 4. Ignorer un message Gmail déjà traité.
 5. Compléter uniquement les champs vides et conserver les champs commerciaux existants.
 6. Enregistrer l'ID du message après la réussite de toute la transaction.

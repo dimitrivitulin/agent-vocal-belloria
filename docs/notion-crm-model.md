@@ -55,7 +55,7 @@ Au moins un email ou un téléphone est requis. `Tech — Clé contact` vaut, pa
 | Tech — Créée le | Date de création | oui | Audit Notion. |
 | Tech — Modifiée le | Date de modification | oui | Audit Notion. |
 
-`Gmail — ID du fil` est obligatoire pour une opportunité issue de Gmail. Une opportunité créée manuellement peut ne pas en avoir.
+`Gmail — ID du fil` est obligatoire pour une opportunité issue de Gmail. Pour Tally, ce champ reçoit le `messageId` de la soumission, car plusieurs clients peuvent partager un même fil Gmail. Une opportunité créée manuellement peut ne pas en avoir.
 
 ## Cycle de vie d'une opportunité
 
@@ -91,7 +91,7 @@ Toute création automatique commence à `Nouveau`, sauf si la qualification éta
 
 ### Rapprochement d'une opportunité
 
-1. Pour Gmail, rechercher d'abord `Gmail — ID du fil` : un fil correspond à une opportunité active.
+1. Pour Gmail, rechercher d'abord `Gmail — ID du fil` : un fil correspond à une opportunité active, sauf pour Tally où chaque `messageId` correspond à une soumission indépendante.
 2. Sinon, construire `Tech — Clé opportunité` avec `contact_key|date_iso_ou_inconnue|type_evenement`.
 3. Une clé identique rapproche une opportunité non terminale ou clôturée depuis moins de 30 jours.
 4. Plusieurs correspondances, une date inconnue avec informations contradictoires, ou une opportunité terminale plus ancienne déclenchent une revue manuelle.
