@@ -21,10 +21,20 @@ const TOOLS = [
   },
   {
     name: "belloria_list_tally_submissions",
-    description: "List pending Tally form submissions received directly by the signed Cloudflare webhook.",
+    description: "List technical metadata for pending Tally submissions without exposing form answers.",
     inputSchema: {
       type: "object",
       properties: { limit: { type: "integer", minimum: 1, maximum: 20, default: 10 } },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "belloria_get_tally_submission_fallback",
+    description: "Read one pending raw Tally payload by event ID only when the Tally connector is unavailable or cannot find the expected submission.",
+    inputSchema: {
+      type: "object",
+      properties: { event_id: { type: "string", minLength: 1, maxLength: 100 } },
+      required: ["event_id"],
       additionalProperties: false
     }
   },
@@ -467,7 +477,7 @@ async function listCommands(env, limit) {
 
 async function listTallySubmissions(env, limit) {
   const result = await env.DB.prepare(
-    "SELECT event_id, submission_id, form_id, form_name, submitted_at, payload_json, created_at FROM tally_submissions WHERE state = 'pending' ORDER BY created_at LIMIT ?"
+    "SELECT event_id, submission_id, form_id, form_name, submitted_at, created_at FROM tally_submissions WHERE state = 'pending' ORDER BY created_at LIMIT ?"
   ).bind(limit).all();
   return (result.results || []).map((row) => ({
     event_id: row.event_id,
@@ -475,9 +485,17 @@ async function listTallySubmissions(env, limit) {
     form_id: row.form_id,
     form_name: row.form_name,
     submitted_at: row.submitted_at,
-    received_at: row.created_at,
-    payload: safeJson(row.payload_json, {})
+    received_at: row.created_at
   }));
+}
+
+async function getTallySubmissionFallback(env, eventId) {
+  const id = requiredText(eventId, "event_id", 100);
+  const result = await env.DB.prepare(
+    "SELECT payload_json FROM tally_submissions WHERE event_id = ? AND state = 'pending' LIMIT 1"
+  ).bind(id).all();
+  const row = result.results?.[0];
+  return row ? { found: true, event_id: id, payload: safeJson(row.payload_json, {}) } : { found: false, event_id: id };
 }
 
 async function completeTallySubmission(env, eventId) {
@@ -604,6 +622,8 @@ async function mcp(request, env) {
       const limit = args.limit === undefined ? 10 : args.limit;
       if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error("limit must be an integer from 1 to 20");
       value = { submissions: await listTallySubmissions(env, limit) };
+    } else if (name === "belloria_get_tally_submission_fallback") {
+      value = await getTallySubmissionFallback(env, args.event_id || "");
     } else if (name === "belloria_complete_tally_submission") {
       if (args.confirmed !== true) throw new Error("explicit confirmation is required");
       value = await completeTallySubmission(env, args.event_id || "");

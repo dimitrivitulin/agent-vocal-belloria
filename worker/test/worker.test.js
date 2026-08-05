@@ -124,6 +124,10 @@ class FakeDb {
   }
 
   all(sql, args) {
+    if (sql.startsWith("SELECT payload_json")) {
+      const row = this.tally.get(args[0]);
+      return { results: row?.state === "pending" ? [{ payload_json: row.payload_json }] : [] };
+    }
     if (sql.startsWith("SELECT event_id")) {
       return { results: [...this.tally.values()].filter((row) => row.state === "pending").slice(0, args[0]) };
     }
@@ -302,7 +306,7 @@ test("exposes provider-neutral Belloria tools after OAuth validation", async () 
   const response = await (await callMcp(list, env)).json();
   assert.deepEqual(response.result.tools.map((tool) => tool.name), [
     "belloria_channel_status", "belloria_list_commands", "belloria_list_tally_submissions",
-    "belloria_complete_tally_submission", "belloria_complete_command",
+    "belloria_get_tally_submission_fallback", "belloria_complete_tally_submission", "belloria_complete_command",
     "belloria_refresh_fast_snapshots", "belloria_propose_action",
     "belloria_consume_approved_action", "belloria_send_text"
   ]);
@@ -326,7 +330,7 @@ test("authenticates, filters and deduplicates direct Tally webhooks", async () =
   assert.equal(env.DB.tally.size, 1);
 });
 
-test("lists direct Tally submissions and erases payload after CRM completion", async () => {
+test("lists Tally metadata, exposes one fallback payload and erases it after CRM completion", async () => {
   const env = environment();
   await handleRequest(await tallyRequest(tallyEvent()), env);
 
@@ -334,15 +338,24 @@ test("lists direct Tally submissions and erases payload after CRM completion", a
   const submissions = JSON.parse(listed.result.content[0].text).submissions;
   assert.equal(submissions.length, 1);
   assert.equal(submissions[0].event_id, "event-1");
-  assert.equal(submissions[0].payload.data.fields[0].value, "Camille");
+  assert.equal("payload" in submissions[0], false);
 
-  const denied = await (await callMcp(toolCall(41, "belloria_complete_tally_submission", { event_id: "event-1", confirmed: false }), env)).json();
+  const fallback = await (await callMcp(toolCall(41, "belloria_get_tally_submission_fallback", { event_id: "event-1" }), env)).json();
+  assert.equal(JSON.parse(fallback.result.content[0].text).payload.data.fields[0].value, "Camille");
+
+  const absent = await (await callMcp(toolCall(42, "belloria_get_tally_submission_fallback", { event_id: "missing" }), env)).json();
+  assert.deepEqual(JSON.parse(absent.result.content[0].text), { found: false, event_id: "missing" });
+
+  const denied = await (await callMcp(toolCall(43, "belloria_complete_tally_submission", { event_id: "event-1", confirmed: false }), env)).json();
   assert.equal(denied.error.message, "explicit confirmation is required");
   assert.notEqual(env.DB.tally.get("event-1").payload_json, null);
 
-  const completed = await (await callMcp(toolCall(42, "belloria_complete_tally_submission", { event_id: "event-1", confirmed: true }), env)).json();
+  const completed = await (await callMcp(toolCall(44, "belloria_complete_tally_submission", { event_id: "event-1", confirmed: true }), env)).json();
   assert.deepEqual(JSON.parse(completed.result.content[0].text), { completed: true });
   assert.equal(env.DB.tally.get("event-1").payload_json, null);
+
+  const erased = await (await callMcp(toolCall(45, "belloria_get_tally_submission_fallback", { event_id: "event-1" }), env)).json();
+  assert.deepEqual(JSON.parse(erased.result.content[0].text), { found: false, event_id: "event-1" });
 });
 
 test("refreshes temporary snapshots and completes a fast consultation in waitUntil", async () => {

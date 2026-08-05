@@ -6,12 +6,20 @@ Le connecteur Tally devient le chemin de lecture privilégié des réponses dans
 
 Le serveur MCP officiel Tally sait lister les formulaires et récupérer leurs soumissions via OAuth. Tally le présente comme gratuit sur tous les plans, mais sa documentation développeur le signale encore en bêta. L'automatisation Belloria ne doit donc pas dépendre exclusivement de sa disponibilité ou de la stabilité de ses outils.
 
+## Inventaire vérifié le 2026-08-06
+
+Le connecteur installé expose deux lectures utiles : `tally_list_forms({filter?, limit?, page?})` et `tally_fetch_submissions({formId, filter?, limit?, page?})`. La seconde renvoie des pages de soumissions (`id`, `submittedAt`, `isCompleted`, `responses`) sans filtre natif par `submission_id`.
+
+Le passage charge donc au plus la première page de 100 réponses du formulaire `44JdrA`, puis sélectionne localement l'identifiant attendu. Il ne parcourt pas l'historique : si l'identifiant manque ou si l'appel échoue, il utilise le repli D1 ciblé. La soumission contrôlée `DqAg2Yl` a été retrouvée sur cette première page avec 11 réponses et l'horodatage `2026-08-05T22:11:55.000Z`.
+
+Les autres outils visibles analysent ou modifient les blocs, la logique, les réglages, le style ou la publication. Ils sont hors périmètre et ne doivent jamais être appelés par la tâche.
+
 ## Flux cible
 
 1. Tally envoie `FORM_RESPONSE` au webhook signé.
 2. Le Worker déduplique `event_id` et `submission_id`, puis conserve le payload brut en D1.
 3. Le passage Work liste dans D1 uniquement les métadonnées `pending`.
-4. Pour chaque élément, il demande au connecteur Tally la soumission exacte par `form_id=44JdrA` et `submission_id`.
+4. Pour chaque élément, il charge au plus la première page de 100 réponses du `form_id=44JdrA`, puis sélectionne exactement le `submission_id` attendu.
 5. Il vérifie la concordance des deux identifiants avant toute mutation.
 6. Il synchronise le contact et l'opportunité dans Notion de façon idempotente.
 7. Après succès seulement, il acquitte l'événement D1 ; le payload brut est effacé.
@@ -57,3 +65,7 @@ Le serveur MCP officiel Tally sait lister les formulaires et récupérer leurs s
 - Divergence `form_id` ou `submission_id` entre Tally et D1.
 - Succès Notion suivi d'une reprise, sans double mutation.
 - Vérification qu'aucun outil d'écriture Tally n'est invoqué.
+
+## Déconnexion sûre
+
+Déconnecter Tally de ChatGPT Work ne modifie ni le webhook ni les secrets Cloudflare. Le passage compte alors `tally_error`, lit chaque événement par `belloria_get_tally_submission_fallback(event_id)` et conserve l'acquittement après succès CRM uniquement.

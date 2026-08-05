@@ -1,6 +1,6 @@
 # BELL-035 — Intégration du plugin Tally dans ChatGPT Work
 
-Statut: pending
+Statut: completed
 Branche: `codex/bell-035-tally-plugin-work`
 Dernière mise à jour: 2026-08-06
 
@@ -31,4 +31,8 @@ Le plugin Tally simplifie la lecture mais ne remplace ni le webhook temps réel 
 
 ## Prochaine action
 
-Au démarrage du lot, relever les noms et schémas exacts des outils Tally visibles dans ChatGPT Work, puis implémenter le contrat minimal décrit dans `docs/tally-plugin-work.md`.
+Lot terminé ; prochaine action : choisir le prochain lot cohérent dans `docs/TASKS.md`.
+
+## Résultat intermédiaire
+
+Connecteur inventorié et contrat Worker déployé (`f2c3fbec-492b-42fa-8535-216b42542e90`). `DqAg2Yl` a traversé Tally→Work→Notion→D1 avec `tally_plugin=1`, puis le rejeu n'a trouvé aucun élément. 21 tests Worker, 77 tests Python et `git diff --check` réussissent.

@@ -29,6 +29,6 @@ Le Worker refuse une signature invalide, un événement autre que `FORM_RESPONSE
 
 ## Traitement et rétention
 
-Le passage ChatGPT Work récupère les soumissions avec `belloria_list_tally_submissions`. Après création ou mise à jour réussie du CRM, il appelle `belloria_complete_tally_submission` avec confirmation explicite. Le payload brut est alors effacé de D1, tandis que l'identifiant technique et l'état traité sont conservés pour l'idempotence.
+Le passage ChatGPT Work récupère les métadonnées avec `belloria_list_tally_submissions`, lit la réponse par le connecteur Tally et réserve `belloria_get_tally_submission_fallback` au repli ciblé. Après création ou mise à jour réussie du CRM, il appelle `belloria_complete_tally_submission` avec confirmation explicite. Le payload brut est alors effacé de D1, tandis que l'identifiant technique et l'état traité sont conservés pour l'idempotence.
 
 En cas d'échec CRM, la soumission reste `pending` et sera reprise au passage suivant. La notification email Tally peut rester activée pour lecture humaine, mais elle doit être exclue de la file automatisée Gmail.

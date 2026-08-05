@@ -10,7 +10,8 @@ Outils exposés :
 
 - `belloria_channel_status` indique seulement si Telegram et la transcription sont configurés ; aucun identifiant ni secret n'est renvoyé.
 - `belloria_list_commands` retourne au plus 20 commandes en attente, avec le texte ou la transcription vocale, ainsi que les erreurs vocales mises en quarantaine.
-- `belloria_list_tally_submissions` retourne au plus 20 soumissions Tally directes en attente, avec leur payload signé déjà validé par le Worker.
+- `belloria_list_tally_submissions` retourne au plus 20 métadonnées de soumissions Tally directes en attente, sans réponses personnelles.
+- `belloria_get_tally_submission_fallback` retourne le payload d'un seul `event_id` encore en attente lorsque le connecteur Tally ne permet pas la lecture nominale.
 - `belloria_complete_tally_submission` marque une soumission comme traitée uniquement après confirmation explicite et efface alors son payload brut de D1.
 - `belloria_complete_command` exige `confirmed: true`, marque une commande en attente ou en quarantaine comme traitée et efface son contenu dans D1.
 - `belloria_propose_action` conserve dans D1 le prospect, les sources, le contenu exact, la conséquence et un jeton d’approbation pendant quinze minutes au maximum.

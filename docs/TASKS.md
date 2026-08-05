@@ -56,9 +56,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
-- [ ] **BELL-035 — Intégration du plugin Tally dans ChatGPT Work** (`pending`)
+- [x] **BELL-035 — Intégration du plugin Tally dans ChatGPT Work** (`completed`)
   Utiliser le connecteur Tally pour lire une soumission ciblée, avec le webhook/D1 comme déclencheur, registre anti-perte et repli. Réduire l'exposition du payload D1 par défaut et empêcher toute modification de formulaire depuis la tâche automatisée.
   **Terminé lorsque** une soumission contrôlée traverse Tally→Work→Notion→acquittement D1, que le rejeu reste sans doublon et que l'indisponibilité du connecteur utilise le repli ciblé sans repasser par Gmail.
+  Contrat Worker déployé, tâche Work actualisée et connecteur Belloria rafraîchi. `DqAg2Yl` a été lu par Tally, synchronisé puis acquitté ; le rejeu n'a produit aucune nouvelle mutation.
 
 - [x] **BELL-034 — Réception directe des formulaires Tally** (`completed`)
   Recevoir le JSON signé de Tally dans le Worker, le dédupliquer dans D1 et l'exposer au passage ChatGPT Work par MCP. Gmail reste la source des emails directs et de Mariages.net, mais n'est plus la voie d'entrée des formulaires Tally.
