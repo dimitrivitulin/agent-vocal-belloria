@@ -22,8 +22,10 @@ Brancher les commandes Telegram texte ou vocales au contexte prospect 360 et au 
 - 63 tests Python réussis, dont 8 scénarios conversationnels dédiés et le contrat SQL D1 réel.
 - 13 tests Worker réussis ; `git diff --check` réussi.
 - `/health` opérationnel, aucune migration distante restante et accès MCP anonyme refusé en `401`.
+- Message Telegram réel envoyé (`message_id=10`) et réponse unique reçue puis effacée (`command_id=602781224`).
+- Application Belloria actualisée : les six outils MCP sont visibles ; aller simple mesuré à environ 2 min 05 s.
 - Diff, périmètre, secrets et artefacts contrôlés.
 
 ## Prochaine action
 
-Avec autorisation explicite d’envoyer un message de test, exécuter un aller-retour Telegram réel, vérifier les six outils MCP et mesurer la latence avant de passer BELL-030 à `completed`.
+Déclencher automatiquement le traitement interactif à la réception du webhook et ramener la latence mesurée sous deux minutes avant de passer BELL-030 à `completed`.

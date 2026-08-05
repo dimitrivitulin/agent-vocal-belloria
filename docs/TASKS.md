@@ -25,7 +25,7 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 - [ ] **BELL-030 — Agent conversationnel Telegram** (`ready_for_review`)
   Permettre en texte ou vocal : « mes priorités », « résume ce prospect », « que lui proposer ? », « prépare une réponse », « prépare le devis », « relance-le », « mon planning du jour » et « où en est le CA ? ». Réduire la latence cible à moins de deux minutes ; conserver le passage horaire comme reprise de secours.
   **Terminé lorsque** une conversation Telegram peut charger le bon contexte, proposer une action, obtenir la confirmation et exécuter uniquement l'action approuvée avec un compte rendu traçable.
-  Cœur conversationnel et stockage D1 des approbations livrés et déployés avec confirmation bornée à usage unique. Reste un aller-retour Telegram réel et la mesure de latence avant clôture.
+  Cœur conversationnel et stockage D1 des approbations livrés et déployés avec confirmation bornée à usage unique. L’aller-retour Telegram réel et les six outils MCP sont validés ; la mesure d’environ 2 min 05 s dépasse encore légèrement la cible et le traitement entrant doit être déclenché automatiquement avant clôture.
 
 - [ ] **BELL-031 — Boucle anti-perte et suivi automatique** (`pending`)
   Détecter demandes sans réponse, relances échues, devis silencieux, acomptes attendus, événements proches ou passés et collisions avec une prestation confirmée. Générer le briefing Telegram et mettre à jour le CRM de façon idempotente.
