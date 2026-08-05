@@ -12,6 +12,8 @@ Créer l'application personnalisée avec l'URL `https://belloria-assistant.bello
 
 ## Commandes Telegram
 
+Le contrat conversationnel et la confirmation à usage unique sont décrits dans `docs/agent-telegram-integration.md`. Le passage horaire constitue la reprise de secours ; une exécution interactive peut invoquer le même orchestrateur dès réception pour respecter la cible de deux minutes.
+
 Au début de chaque passage, appeler `belloria_list_commands` avec une limite de 10. Pour `status=pending`, le champ `text` contient soit le message saisi, soit la transcription du vocal. Pour `status=quarantined`, ne rien exécuter : signaler seulement le code d'erreur assaini. Une commande de consultation peut être exécutée dans le périmètre Gmail/Notion déjà autorisé. Une mutation, un envoi d'email ou une action irréversible exige toujours une confirmation explicite portant sur son contenu exact.
 
 Après traitement réussi ou décision explicite de ne pas agir, appeler `belloria_complete_command` avec l'identifiant reçu et `confirmed: true` ; le Worker efface alors le texte conservé dans D1. En cas d'erreur technique, laisser la commande en attente pour la reprise suivante.

@@ -17,6 +17,15 @@ from .context import (
     ResolvedFact,
     conversation_key,
 )
+from .telegram_agent import (
+    AgentReply,
+    Intent,
+    MemoryApprovalStore,
+    ProspectMatch,
+    ProposedAction,
+    TelegramCommandParser,
+    TelegramSalesAgent,
+)
 
 __all__ = [
     "CandidateMessage",
@@ -32,4 +41,11 @@ __all__ = [
     "ProspectContext",
     "ResolvedFact",
     "conversation_key",
+    "AgentReply",
+    "Intent",
+    "MemoryApprovalStore",
+    "ProspectMatch",
+    "ProposedAction",
+    "TelegramCommandParser",
+    "TelegramSalesAgent",
 ]
