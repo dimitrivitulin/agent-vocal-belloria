@@ -330,6 +330,31 @@ test("authenticates, filters and deduplicates direct Tally webhooks", async () =
   assert.equal(env.DB.tally.size, 1);
 });
 
+test("acknowledges a newly persisted Tally submission on Telegram only once", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (url, init) => {
+    assert.equal(String(url), "https://api.telegram.org/bottelegram-test-token/sendMessage");
+    sent.push(JSON.parse(init.body));
+    return Response.json({ ok: true, result: { message_id: 99 } });
+  };
+  try {
+    const env = environment();
+    const firstContext = executionContext();
+    assert.deepEqual(await (await handleRequest(await tallyRequest(tallyEvent()), env, firstContext)).json(), { accepted: 1 });
+    await firstContext.drain();
+
+    const replayContext = executionContext();
+    assert.deepEqual(await (await handleRequest(await tallyRequest(tallyEvent()), env, replayContext)).json(), { accepted: 0 });
+    await replayContext.drain();
+
+    assert.deepEqual(sent, [{
+      chat_id: "123456",
+      text: "Nouvelle demande Tally reçue. Traitement CRM en attente."
+    }]);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("lists Tally metadata, exposes one fallback payload and erases it after CRM completion", async () => {
   const env = environment();
   await handleRequest(await tallyRequest(tallyEvent()), env);

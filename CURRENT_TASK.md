@@ -1,38 +1,35 @@
-# BELL-035 — Intégration du plugin Tally dans ChatGPT Work
+# BELL-036 — Notification Telegram immédiate des demandes Tally
 
-Statut: completed
-Branche: `codex/bell-035-tally-plugin-work`
+Statut: in_progress
+Branche: `codex/bell-036-tally-trigger-telegram`
 Dernière mise à jour: 2026-08-06
 
 ## Objectif
 
-Utiliser le connecteur Tally pour lire plus simplement une soumission dans ChatGPT Work, tout en conservant le webhook Cloudflare et D1 comme file anti-perte et autorité d'idempotence.
+Après une soumission Tally, prévenir Belloria immédiatement sur Telegram sans ajouter de service ni d'API payante.
 
-## Périmètre prévu
+## Périmètre
 
-- Inventorier les outils réellement exposés par le connecteur Tally installé dans ChatGPT Work.
-- Faire retourner par la liste D1 uniquement les métadonnées techniques, sans payload personnel par défaut.
-- Ajouter une lecture ciblée du payload D1 réservée au repli si Tally est indisponible.
-- Adapter la tâche Work : D1 détecte, Tally lit, Notion synchronise, D1 acquitte après succès.
-- Exclure les notifications Tally de la recherche Gmail sans désactiver leur éventuelle réception humaine.
-- Interdire à la tâche toute création ou modification de formulaire Tally.
+- Envoyer depuis le Worker une notification Telegram technique, concise et sans payload personnel inutile après ingestion D1 réussie.
+- Conserver D1 comme file anti-perte et le passage horaire comme reprise.
+- Faire produire par l'agent la notification Telegram finale après succès Notion, sans envoi client.
+- Ne jamais journaliser le payload Tally.
 
 ## Critères de réussite
 
-- Une soumission contrôlée est retrouvée par son `submission_id` via Tally et concorde avec l'événement D1.
-- Le CRM n'est muté qu'une fois et l'acquittement D1 intervient après succès Notion.
-- Une indisponibilité ou une évolution du connecteur Tally déclenche le repli D1 sans perte ni doublon.
-- La tâche ne peut ni créer, ni éditer un formulaire et ne charge pas en masse les réponses historiques.
-- Tests Worker, passage Work contrôlé, `git diff --check` et examen du diff réussissent.
+- Une soumission réelle reçoit un accusé Telegram en moins d'une minute.
+- Un rejeu du même événement ne produit pas une seconde notification.
+- La notification finale confirme le succès CRM ; une erreur reste visible et l'événement demeure `pending`.
+- Tests Worker, passage réel contrôlé, `git diff --check` et examen du diff réussissent.
 
-## Décision préparée
+## Décision
 
-Le plugin Tally simplifie la lecture mais ne remplace ni le webhook temps réel ni D1. Le serveur MCP Tally est encore annoncé en bêta ; la file locale reste donc nécessaire.
+Ne pas utiliser Workspace Agents API afin de ne pas ajouter de coût. Le webhook assure l'alerte immédiate ; la tâche ChatGPT Work horaire reste responsable du traitement Tally→Notion et de la confirmation finale.
 
 ## Prochaine action
 
-Lot terminé ; prochaine action : choisir le prochain lot cohérent dans `docs/TASKS.md`.
+Après accord explicite de mise en production, déployer l'accusé Telegram et effectuer une soumission Tally contrôlée.
 
 ## Résultat intermédiaire
 
-Connecteur inventorié et contrat Worker déployé (`f2c3fbec-492b-42fa-8535-216b42542e90`). `DqAg2Yl` a traversé Tally→Work→Notion→D1 avec `tally_plugin=1`, puis le rejeu n'a trouvé aucun élément. 21 tests Worker, 77 tests Python et `git diff --check` réussissent.
+L'accusé Telegram minimal est planifié par `waitUntil` uniquement après une nouvelle insertion D1 ; un rejeu ne renvoie rien et une erreur Telegram ne remet pas en cause la file anti-perte. 22 tests Worker passent. La suite Python n'a pas pu démarrer faute d'interpréteur disponible.

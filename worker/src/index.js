@@ -436,7 +436,16 @@ export function extractTallySubmission(document) {
   };
 }
 
-async function tallyWebhook(request, env) {
+async function notifyTallyIngestion(env) {
+  try {
+    await sendText(env, "Nouvelle demande Tally reçue. Traitement CRM en attente.");
+    console.log(JSON.stringify({ event: "tally_telegram_ack_sent" }));
+  } catch (error) {
+    console.log(JSON.stringify({ event: "tally_telegram_ack_failed", code: cleanErrorCode(error, "telegram_ack_failed") }));
+  }
+}
+
+async function tallyWebhook(request, env, context) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
   if (!env.TALLY_WEBHOOK_SECRET || !env.TALLY_FORM_ID) return json({ error: "unauthorized" }, 401);
   const rawBody = await request.text();
@@ -454,6 +463,7 @@ async function tallyWebhook(request, env) {
     "INSERT INTO tally_submissions (event_id, submission_id, form_id, form_name, submitted_at, payload_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
   ).bind(submission.eventId, submission.submissionId, submission.formId, submission.formName, submission.createdAt, JSON.stringify(document)).run();
   const inserted = Number(result.meta?.changes || 0) === 1;
+  if (inserted && context?.waitUntil) context.waitUntil(notifyTallyIngestion(env));
   console.log(JSON.stringify({ event: "tally_webhook_ingested", accepted: inserted ? 1 : 0, form_id: submission.formId }));
   return json({ accepted: inserted ? 1 : 0 });
 }
@@ -649,7 +659,7 @@ export async function handleRequest(request, env, context) {
   const path = new URL(request.url).pathname;
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
-  if (path === "/webhooks/tally") return tallyWebhook(request, env);
+  if (path === "/webhooks/tally") return tallyWebhook(request, env, context);
   return json({ error: "not found" }, 404);
 }
 

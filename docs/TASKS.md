@@ -56,6 +56,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [ ] **BELL-036 — Notification Telegram immédiate des demandes Tally** (`in_progress`)
+  Envoyer sans coût supplémentaire un accusé Telegram dès l'ingestion du webhook, avec D1 comme file anti-perte et le passage horaire comme traitement CRM.
+  **Terminé lorsque** une soumission contrôlée est signalée en moins d'une minute, qu'un rejeu ne renvoie pas de seconde notification et que le traitement horaire reste intact.
+
 - [x] **BELL-035 — Intégration du plugin Tally dans ChatGPT Work** (`completed`)
   Utiliser le connecteur Tally pour lire une soumission ciblée, avec le webhook/D1 comme déclencheur, registre anti-perte et repli. Réduire l'exposition du payload D1 par défaut et empêcher toute modification de formulaire depuis la tâche automatisée.
   **Terminé lorsque** une soumission contrôlée traverse Tally→Work→Notion→acquittement D1, que le rejeu reste sans doublon et que l'indisponibilité du connecteur utilise le repli ciblé sans repasser par Gmail.
