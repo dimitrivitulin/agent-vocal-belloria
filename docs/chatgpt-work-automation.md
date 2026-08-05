@@ -32,6 +32,14 @@ Pour une mutation, enregistrer d’abord la proposition avec `belloria_propose_a
 8. Produire un rapport comptant les messages traités, à revoir et en erreur, sans données personnelles inutiles.
 9. Préparer le rapport comme brouillon Telegram. Afficher le texte exact et demander une confirmation humaine avant d'appeler `belloria_send_text` avec `confirmed: true`.
 
+## Boucle anti-perte BELL-031
+
+Après l'ingestion, charger les opportunités non terminales et exécuter `AntiLossLoop` avec l'heure du passage en Europe/Paris. L'adaptateur Notion traduit les propriétés CRM vers `FollowUpOpportunity` et applique chaque `CrmUpdate` atomiquement : `Prochaine action`, `Échéance` et ajout de `alert_key` dans `Tech — Alertes de suivi`. Une clé déjà présente rend la mutation sans effet.
+
+L'ordre de priorité est : événement passé sans clôture, collision avec une prestation confirmée, événement à moins de sept jours, acompte échu, devis silencieux depuis trois jours, demande sans réponse depuis un jour, puis relance échue. Si aucune anomalie n'existe mais qu'une opportunité active n'a pas d'action datée, programmer `Examiner et définir la prochaine action` au lendemain sans l'inclure dans le briefing.
+
+Envoyer le briefing Telegram seulement lorsqu'il contient une nouvelle anomalie, selon la même règle de confirmation humaine que le rapport de passage. Un passage rejoué avec les mêmes sources ne doit ni réécrire le CRM ni signaler de nouveau l'anomalie. Aucun email client n'est envoyé par cette boucle.
+
 ## Sortie attendue
 
 ```text

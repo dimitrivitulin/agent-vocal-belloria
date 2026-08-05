@@ -51,6 +51,7 @@ Au moins un email ou un téléphone est requis. `Tech — Clé contact` vaut, pa
 | Gmail — ID du fil | Texte | conditionnel | Identifiant stable du fil Gmail. |
 | Tech — Clé opportunité | Texte | oui | Clé métier de rapprochement. |
 | Tech — IDs messages traités | Texte | non | Ensemble sérialisé des IDs Gmail déjà intégrés. |
+| Tech — Alertes de suivi | Texte | non | Ensemble sérialisé des clés d'alertes anti-perte déjà signalées. |
 | Tech — Dernière synchronisation | Date | oui | Horodatage du dernier traitement réussi. |
 | Tech — Créée le | Date de création | oui | Audit Notion. |
 | Tech — Modifiée le | Date de modification | oui | Audit Notion. |

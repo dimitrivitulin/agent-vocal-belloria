@@ -33,9 +33,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Frontières** : BELL-030 reste propriétaire des intentions et confirmations ; BELL-031 des règles anti-perte et priorités métier ; BELL-032 des KPI commerciaux. BELL-033 mesure seulement les latences techniques et ne conserve ni corps d’email ni conversation client durable dans D1.
   Instantanés D1 temporaires, traitement `waitUntil`, tests texte/vocal et garde-fous déployés. L’aller-retour Telegram synthétique a répondu dans la même seconde après un webhook accusé en 191 ms ; les données de test ont été nettoyées.
 
-- [ ] **BELL-031 — Boucle anti-perte et suivi automatique** (`pending`)
+- [x] **BELL-031 — Boucle anti-perte et suivi automatique** (`completed`)
   Détecter demandes sans réponse, relances échues, devis silencieux, acomptes attendus, événements proches ou passés et collisions avec une prestation confirmée. Générer le briefing Telegram et mettre à jour le CRM de façon idempotente.
   **Terminé lorsque** aucun prospect actif ne peut rester sans prochaine action datée et que les anomalies sont remontées sans doublon.
+  Moteur déterministe et orchestrateur d'adaptation livrés avec priorités, corrections CRM atomiques, clés d'alertes stables et briefing Telegram dédupliqué. Les seuils sont documentés et 71 tests Python valident notamment le rejeu identique le lendemain.
 
 - [ ] **BELL-032 — Mesure et amélioration de la conversion** (`pending`)
   Mesurer délai de première réponse, passage demande→devis, devis→confirmation, montant moyen, relances nécessaires, motifs de perte et fiabilité des recommandations. Constituer un jeu de cas de référence pour comparer les évolutions de l'agent.
