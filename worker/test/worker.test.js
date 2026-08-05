@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import test from "node:test";
-import { createWorkerEntrypoint, extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler } from "../src/index.js";
+import { createWorkerEntrypoint, extractTallySubmission, extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler } from "../src/index.js";
 
 globalThis.crypto ||= webcrypto;
 
 class FakeDb {
-  constructor() { this.rows = new Map(); this.actions = new Map(); this.snapshots = new Map(); }
+  constructor() { this.rows = new Map(); this.actions = new Map(); this.snapshots = new Map(); this.tally = new Map(); }
 
   prepare(sql) {
     const db = this;
@@ -28,6 +28,21 @@ class FakeDb {
   }
 
   run(sql, args) {
+    if (sql.startsWith("INSERT INTO tally_submissions")) {
+      const [event_id, submission_id, form_id, form_name, submitted_at, payload_json] = args;
+      if (this.tally.has(event_id) || [...this.tally.values()].some((row) => row.submission_id === submission_id)) return { meta: { changes: 0 } };
+      this.tally.set(event_id, { event_id, submission_id, form_id, form_name, submitted_at, payload_json, state: "pending", created_at: "2026-08-05T10:00:00Z" });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE tally_submissions")) {
+      const [eventId] = args;
+      const row = this.tally.get(eventId);
+      if (!row || row.state !== "pending") return { meta: { changes: 0 } };
+      Object.assign(row, { state: "processed", payload_json: null, processed_at: new Date().toISOString() });
+      return { meta: { changes: 1 } };
+    }
+
     if (sql.startsWith("INSERT INTO telegram_commands")) {
       const [command_id, message_id, command_kind, content, voice_file_id, state] = args;
       if (this.rows.has(command_id)) return { meta: { changes: 0 } };
@@ -109,6 +124,9 @@ class FakeDb {
   }
 
   all(sql, args) {
+    if (sql.startsWith("SELECT event_id")) {
+      return { results: [...this.tally.values()].filter((row) => row.state === "pending").slice(0, args[0]) };
+    }
     if (sql.startsWith("SELECT prospect_id")) return { results: [...this.snapshots.values()].slice(0, args[0]) };
     if (sql.startsWith("SELECT command_id")) {
       const limit = args[0];
@@ -135,10 +153,33 @@ function environment(overrides = {}) {
     TELEGRAM_BOT_TOKEN: "telegram-test-token",
     TELEGRAM_WEBHOOK_SECRET: "webhook-secret",
     TELEGRAM_ALLOWED_CHAT_ID: "123456",
+    TALLY_WEBHOOK_SECRET: "tally-test-secret",
+    TALLY_FORM_ID: "form-belloria",
     BELLORIA_MCP_TOKEN: "oauth-password",
     AI: { run: async () => ({ text: "Transcription de test" }) },
     ...overrides
   };
+}
+
+function tallyEvent(overrides = {}) {
+  return {
+    eventId: "event-1", eventType: "FORM_RESPONSE", createdAt: "2026-08-05T09:59:00Z",
+    data: {
+      submissionId: "submission-1", formId: "form-belloria", formName: "Devis express",
+      createdAt: "2026-08-05T09:58:00Z",
+      fields: [{ key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille" }]
+    },
+    ...overrides
+  };
+}
+
+async function tallyRequest(payload, secret = "tally-test-secret") {
+  const body = JSON.stringify(payload);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = Buffer.from(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body))).toString("base64");
+  return new Request("https://worker.test/webhooks/tally", {
+    method: "POST", headers: { "content-type": "application/json", "tally-signature": signature }, body
+  });
 }
 
 function telegramRequest(payload, secret = "webhook-secret") {
@@ -188,6 +229,15 @@ test("extracts only supported private command shapes", () => {
     content: null, voiceFileId: "voice-file-private", voiceBytes: 1024
   });
   assert.equal(extractTelegramCommand({ update_id: 1, message: { message_id: 1, chat: { id: 1 }, photo: [] } }), null);
+});
+
+test("extracts only complete Tally form response events", () => {
+  assert.deepEqual(extractTallySubmission(tallyEvent()), {
+    eventId: "event-1", submissionId: "submission-1", formId: "form-belloria",
+    formName: "Devis express", createdAt: "2026-08-05T09:58:00Z",
+    fields: [{ key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille" }]
+  });
+  assert.equal(extractTallySubmission({ eventType: "FORM_RESPONSE", data: {} }), null);
 });
 
 test("authenticates webhook, allowlists one chat and deduplicates updates", async () => {
@@ -251,7 +301,8 @@ test("exposes provider-neutral Belloria tools after OAuth validation", async () 
   assert.equal((await handleRequest(mcpRequest(list), env)).status, 404);
   const response = await (await callMcp(list, env)).json();
   assert.deepEqual(response.result.tools.map((tool) => tool.name), [
-    "belloria_channel_status", "belloria_list_commands", "belloria_complete_command",
+    "belloria_channel_status", "belloria_list_commands", "belloria_list_tally_submissions",
+    "belloria_complete_tally_submission", "belloria_complete_command",
     "belloria_refresh_fast_snapshots", "belloria_propose_action",
     "belloria_consume_approved_action", "belloria_send_text"
   ]);
@@ -259,6 +310,39 @@ test("exposes provider-neutral Belloria tools after OAuth validation", async () 
 
   const status = await (await callMcp(toolCall(2, "belloria_channel_status"), env)).json();
   assert.deepEqual(JSON.parse(status.result.content[0].text), { provider: "telegram", configured: true, voice_transcription: true });
+});
+
+test("authenticates, filters and deduplicates direct Tally webhooks", async () => {
+  const env = environment();
+  const request = await tallyRequest(tallyEvent());
+  const wrongSignature = new Request(request.url, { method: "POST", headers: { "tally-signature": "wrong" }, body: await request.clone().text() });
+  assert.equal((await handleRequest(wrongSignature, env)).status, 401);
+
+  const wrongForm = tallyEvent({ data: { ...tallyEvent().data, formId: "other-form" } });
+  assert.equal((await handleRequest(await tallyRequest(wrongForm), env)).status, 403);
+
+  assert.deepEqual(await (await handleRequest(await tallyRequest(tallyEvent()), env)).json(), { accepted: 1 });
+  assert.deepEqual(await (await handleRequest(await tallyRequest(tallyEvent()), env)).json(), { accepted: 0 });
+  assert.equal(env.DB.tally.size, 1);
+});
+
+test("lists direct Tally submissions and erases payload after CRM completion", async () => {
+  const env = environment();
+  await handleRequest(await tallyRequest(tallyEvent()), env);
+
+  const listed = await (await callMcp(toolCall(40, "belloria_list_tally_submissions", { limit: 10 }), env)).json();
+  const submissions = JSON.parse(listed.result.content[0].text).submissions;
+  assert.equal(submissions.length, 1);
+  assert.equal(submissions[0].event_id, "event-1");
+  assert.equal(submissions[0].payload.data.fields[0].value, "Camille");
+
+  const denied = await (await callMcp(toolCall(41, "belloria_complete_tally_submission", { event_id: "event-1", confirmed: false }), env)).json();
+  assert.equal(denied.error.message, "explicit confirmation is required");
+  assert.notEqual(env.DB.tally.get("event-1").payload_json, null);
+
+  const completed = await (await callMcp(toolCall(42, "belloria_complete_tally_submission", { event_id: "event-1", confirmed: true }), env)).json();
+  assert.deepEqual(JSON.parse(completed.result.content[0].text), { completed: true });
+  assert.equal(env.DB.tally.get("event-1").payload_json, null);
 });
 
 test("refreshes temporary snapshots and completes a fast consultation in waitUntil", async () => {

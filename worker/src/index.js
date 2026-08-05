@@ -20,6 +20,28 @@ const TOOLS = [
     }
   },
   {
+    name: "belloria_list_tally_submissions",
+    description: "List pending Tally form submissions received directly by the signed Cloudflare webhook.",
+    inputSchema: {
+      type: "object",
+      properties: { limit: { type: "integer", minimum: 1, maximum: 20, default: 10 } },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "belloria_complete_tally_submission",
+    description: "Mark one direct Tally submission as processed after its CRM synchronization succeeded.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        event_id: { type: "string", minLength: 1, maxLength: 100 },
+        confirmed: { type: "boolean", const: true }
+      },
+      required: ["event_id", "confirmed"],
+      additionalProperties: false
+    }
+  },
+  {
     name: "belloria_complete_command",
     description: "Mark one command as completed and erase its retained text after explicit approval.",
     inputSchema: {
@@ -380,6 +402,52 @@ async function telegramWebhook(request, env, context) {
   return json({ accepted: inserted ? 1 : 0 });
 }
 
+function arrayBufferToBase64Signature(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+}
+
+async function tallySignature(secret, rawBody) {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return arrayBufferToBase64Signature(await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody)));
+}
+
+export function extractTallySubmission(document) {
+  if (document?.eventType !== "FORM_RESPONSE" || typeof document.eventId !== "string" || !document.eventId) return null;
+  const data = document.data;
+  if (!data || typeof data.submissionId !== "string" || !data.submissionId || typeof data.formId !== "string" || !data.formId) return null;
+  if (!Array.isArray(data.fields)) return null;
+  return {
+    eventId: document.eventId.slice(0, 100),
+    submissionId: data.submissionId.slice(0, 100),
+    formId: data.formId.slice(0, 100),
+    formName: typeof data.formName === "string" ? data.formName.slice(0, 200) : null,
+    createdAt: typeof data.createdAt === "string" ? data.createdAt : (typeof document.createdAt === "string" ? document.createdAt : null),
+    fields: data.fields
+  };
+}
+
+async function tallyWebhook(request, env) {
+  if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+  if (!env.TALLY_WEBHOOK_SECRET || !env.TALLY_FORM_ID) return json({ error: "unauthorized" }, 401);
+  const rawBody = await request.text();
+  const suppliedSignature = request.headers.get("tally-signature") || "";
+  const expectedSignature = await tallySignature(env.TALLY_WEBHOOK_SECRET, rawBody);
+  if (!timingSafeEqual(suppliedSignature, expectedSignature)) return json({ error: "unauthorized" }, 401);
+
+  let document;
+  try { document = JSON.parse(rawBody); } catch { return json({ error: "invalid json" }, 400); }
+  const submission = extractTallySubmission(document);
+  if (!submission) return json({ error: "invalid event" }, 400);
+  if (!timingSafeEqual(submission.formId, env.TALLY_FORM_ID)) return json({ error: "form not allowed" }, 403);
+
+  const result = await env.DB.prepare(
+    "INSERT INTO tally_submissions (event_id, submission_id, form_id, form_name, submitted_at, payload_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
+  ).bind(submission.eventId, submission.submissionId, submission.formId, submission.formName, submission.createdAt, JSON.stringify(document)).run();
+  const inserted = Number(result.meta?.changes || 0) === 1;
+  console.log(JSON.stringify({ event: "tally_webhook_ingested", accepted: inserted ? 1 : 0, form_id: submission.formId }));
+  return json({ accepted: inserted ? 1 : 0 });
+}
+
 function rpcResult(id, result) { return json({ jsonrpc: "2.0", id, result }); }
 function rpcError(id, code, message, status = 200) { return json({ jsonrpc: "2.0", id, error: { code, message } }, status); }
 
@@ -395,6 +463,29 @@ async function listCommands(env, limit) {
     received_at: row.created_at,
     error_code: row.last_error_code || undefined
   }));
+}
+
+async function listTallySubmissions(env, limit) {
+  const result = await env.DB.prepare(
+    "SELECT event_id, submission_id, form_id, form_name, submitted_at, payload_json, created_at FROM tally_submissions WHERE state = 'pending' ORDER BY created_at LIMIT ?"
+  ).bind(limit).all();
+  return (result.results || []).map((row) => ({
+    event_id: row.event_id,
+    submission_id: row.submission_id,
+    form_id: row.form_id,
+    form_name: row.form_name,
+    submitted_at: row.submitted_at,
+    received_at: row.created_at,
+    payload: safeJson(row.payload_json, {})
+  }));
+}
+
+async function completeTallySubmission(env, eventId) {
+  const id = requiredText(eventId, "event_id", 100);
+  const result = await env.DB.prepare(
+    "UPDATE tally_submissions SET state = 'processed', payload_json = NULL, processed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE event_id = ? AND state = 'pending'"
+  ).bind(id).run();
+  return { completed: Number(result.meta?.changes || 0) === 1 };
 }
 
 async function completeCommand(env, commandId) {
@@ -509,6 +600,13 @@ async function mcp(request, env) {
       const limit = args.limit === undefined ? 10 : args.limit;
       if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error("limit must be an integer from 1 to 20");
       value = { commands: await listCommands(env, limit) };
+    } else if (name === "belloria_list_tally_submissions") {
+      const limit = args.limit === undefined ? 10 : args.limit;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error("limit must be an integer from 1 to 20");
+      value = { submissions: await listTallySubmissions(env, limit) };
+    } else if (name === "belloria_complete_tally_submission") {
+      if (args.confirmed !== true) throw new Error("explicit confirmation is required");
+      value = await completeTallySubmission(env, args.event_id || "");
     } else if (name === "belloria_refresh_fast_snapshots") {
       value = await refreshFastSnapshots(env, args);
     } else if (name === "belloria_complete_command") {
@@ -531,6 +629,7 @@ export async function handleRequest(request, env, context) {
   const path = new URL(request.url).pathname;
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
+  if (path === "/webhooks/tally") return tallyWebhook(request, env);
   return json({ error: "not found" }, 404);
 }
 
@@ -538,7 +637,7 @@ export function createWorkerEntrypoint(oauthProvider) {
   return {
     fetch(request, env, context) {
       const path = new URL(request.url).pathname;
-      if (path === "/health" || path === "/webhooks/telegram") {
+      if (path === "/health" || path === "/webhooks/telegram" || path === "/webhooks/tally") {
         return handleRequest(request, env, context);
       }
       return oauthProvider.fetch(request, env, context);

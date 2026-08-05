@@ -8,13 +8,13 @@ Les labels et filtres Gmail Belloria sont actifs et le passage contrôlé est va
 
 ## Application MCP Belloria
 
-Créer l'application personnalisée avec l'URL `https://belloria-assistant.belloria-dvitulin.workers.dev/mcp` et le mode `OAuth`. Le Worker gère la découverte, PKCE et l'enregistrement dynamique ; la page Belloria demande le secret propriétaire sans le transmettre à ChatGPT. Vérifier la présence exacte des outils `belloria_channel_status`, `belloria_list_commands`, `belloria_complete_command`, `belloria_propose_action`, `belloria_consume_approved_action` et `belloria_send_text`.
+Créer l'application personnalisée avec l'URL `https://belloria-assistant.belloria-dvitulin.workers.dev/mcp` et le mode `OAuth`. Le Worker gère la découverte, PKCE et l'enregistrement dynamique ; la page Belloria demande le secret propriétaire sans le transmettre à ChatGPT. Vérifier notamment la présence des outils `belloria_list_tally_submissions`, `belloria_complete_tally_submission`, `belloria_list_commands`, `belloria_complete_command`, `belloria_propose_action`, `belloria_consume_approved_action` et `belloria_send_text`.
 
 ## Commandes Telegram
 
 Le contrat conversationnel et la confirmation à usage unique sont décrits dans `docs/agent-telegram-integration.md`. Le passage horaire constitue la reprise de secours ; une exécution interactive peut invoquer le même orchestrateur dès réception pour respecter la cible de deux minutes.
 
-Au début de chaque passage, appeler `belloria_list_commands` avec une limite de 10. Pour `status=pending`, le champ `text` contient soit le message saisi, soit la transcription du vocal. Pour `status=quarantined`, ne rien exécuter : signaler seulement le code d'erreur assaini. Une commande de consultation peut être exécutée dans le périmètre Gmail/Notion déjà autorisé. Une mutation, un envoi d'email ou une action irréversible exige toujours une confirmation explicite portant sur son contenu exact.
+Au début de chaque passage, appeler `belloria_list_tally_submissions` puis `belloria_list_commands`, chacun avec une limite de 10. Traiter chaque soumission Tally de façon déterministe et n'appeler `belloria_complete_tally_submission` qu'après le succès de la synchronisation CRM. Pour une commande Telegram `status=pending`, le champ `text` contient soit le message saisi, soit la transcription du vocal. Pour `status=quarantined`, ne rien exécuter : signaler seulement le code d'erreur assaini. Une commande de consultation peut être exécutée dans le périmètre Gmail/Notion déjà autorisé. Une mutation, un envoi d'email ou une action irréversible exige toujours une confirmation explicite portant sur son contenu exact.
 
 Après traitement réussi ou décision explicite de ne pas agir, appeler `belloria_complete_command` avec l'identifiant reçu et `confirmed: true` ; le Worker efface alors le texte conservé dans D1. En cas d'erreur technique, laisser la commande en attente pour la reprise suivante.
 
@@ -22,15 +22,16 @@ Pour une mutation, enregistrer d’abord la proposition avec `belloria_propose_a
 
 ## Instruction de la tâche
 
-1. Lister les messages portant `Belloria/Candidat`, hors `Traite` et `A-revoir`; reprendre `Erreur` selon le compteur de tentatives et `En-cours` seulement si son verrou a expiré.
-2. Traiter chaque message comme une unité indépendante identifiée par `messageId`; utiliser `threadId` pour rapprocher l'opportunité, mais utiliser `messageId` comme clé d'opportunité pour chaque soumission Tally.
-3. Remplacer l'état du message par `En-cours`, puis appliquer le contrat de `docs/gmail-qualification.md`.
-4. Pour `hors_perimetre`, ne pas appeler le CRM et appliquer `Traite`.
-5. Pour `a_revoir`, ne pas muter le CRM et appliquer `A-revoir` avec un motif concis.
-6. Pour une demande ou une réponse commerciale, appeler la synchronisation CRM. Appliquer `Traite` seulement après son succès. Un résultat rejoué répare simplement le label Gmail.
-7. Sur erreur technique, appliquer `Erreur`, conserver le message non traité côté CRM et poursuivre avec le candidat suivant.
-8. Produire un rapport comptant les messages traités, à revoir et en erreur, sans données personnelles inutiles.
-9. Préparer le rapport comme brouillon Telegram. Afficher le texte exact et demander une confirmation humaine avant d'appeler `belloria_send_text` avec `confirmed: true`.
+1. Lister les soumissions directes avec `belloria_list_tally_submissions`, les synchroniser dans le CRM par `submission_id`, puis les terminer seulement après succès.
+2. Lister dans Gmail les messages portant `Belloria/Candidat`, hors notifications Tally, `Traite` et `A-revoir`; reprendre `Erreur` selon le compteur de tentatives et `En-cours` seulement si son verrou a expiré.
+3. Traiter chaque email comme une unité indépendante identifiée par `messageId` et utiliser `threadId` pour rapprocher l'opportunité.
+4. Remplacer l'état du message Gmail par `En-cours`, puis appliquer le contrat de `docs/gmail-qualification.md`.
+5. Pour `hors_perimetre`, ne pas appeler le CRM et appliquer `Traite`.
+6. Pour `a_revoir`, ne pas muter le CRM et appliquer `A-revoir` avec un motif concis.
+7. Pour une demande ou une réponse commerciale, appeler la synchronisation CRM. Appliquer `Traite` seulement après son succès. Un résultat rejoué répare simplement le label Gmail.
+8. Sur erreur technique, conserver la soumission Tally en attente ou appliquer `Erreur` à l'email, puis poursuivre avec le candidat suivant.
+9. Produire un rapport comptant les soumissions et messages traités, à revoir et en erreur, sans données personnelles inutiles.
+10. Préparer le rapport comme brouillon Telegram. Afficher le texte exact et demander une confirmation humaine avant d'appeler `belloria_send_text` avec `confirmed: true`.
 
 ## Boucle anti-perte BELL-031
 

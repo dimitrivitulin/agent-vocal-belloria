@@ -1,34 +1,33 @@
-# BELL-032 — Mesure et amélioration de la conversion
+# BELL-034 — Réception directe des formulaires Tally
 
-Statut: completed
-Branche: `codex/bell-032-mesure-conversion`
+Statut: ready_for_review
+Branche: `codex/bell-034-webhook-tally`
 Dernière mise à jour: 2026-08-05
 
 ## Objectif
 
-Mesurer le parcours demande→devis→confirmation et évaluer toute évolution du moteur de conversion avant son activation.
+Recevoir les soumissions Tally directement dans Cloudflare, sans utiliser leur notification Gmail comme entrée de traitement.
 
 ## Périmètre
 
-- Calculer délai de première réponse, taux demande→devis, taux devis→confirmation, montant moyen, relances et motifs de perte.
-- Produire une synthèse déterministe adaptée à Telegram et des propriétés structurées pour Notion.
-- Constituer des cas de référence versionnés et comparer un moteur candidat à une référence.
-- Ne contacter aucun service réel et ne modifier aucune donnée distante.
+- Vérifier la signature du webhook et limiter l'entrée au formulaire configuré.
+- Dédupliquer et conserver temporairement les soumissions dans D1.
+- Exposer la file Tally au passage ChatGPT Work via le MCP, puis effacer le payload après succès CRM.
+- Conserver Gmail pour les emails directs et Mariages.net, sans traiter les notifications Tally.
 
 ## Critères de réussite
 
-- Les KPI distinguent données absentes, population éligible et résultats observés.
-- Les montants respectent les preuves : devis envoyé pour le potentiel, facture pour le réalisé.
-- Une régression d’action, d’offre ou de garde-fou est visible avant activation.
-- Tests Python et Worker, `git diff --check` et examen du diff réussissent.
+- Une livraison répétée du même événement ne crée pas de doublon.
+- Une signature invalide ou un autre formulaire est refusé.
+- Le passage planifié peut lister puis terminer explicitement chaque soumission.
+- Tests Worker, `git diff --check` et examen du diff réussissent.
 
 ## Validation
 
-- 77 tests Python et 18 tests Worker réussis.
-- Calcul du funnel, populations vides, preuves financières et qualité des données couverts.
-- Trois scénarios de référence vérifient action, offre et revue humaine ; les régressions sont nommées.
-- Sorties Telegram/Notion pures, sans contact de service réel.
+- 21 tests Worker et 77 tests Python réussis ; signature, filtrage de formulaire, rejeu et effacement après traitement sont couverts.
+- Migration D1 `0005_tally_submissions.sql` ajoutée.
+- Aucun service réel contacté et aucune donnée distante modifiée.
 
 ## Prochaine action
 
-Définir le prochain lot produit à partir des retours d'usage de l'agent commercial complet.
+Après accord : appliquer la migration, charger les secrets, déployer, puis connecter l'URL dans Tally et adapter la tâche ChatGPT Work.
