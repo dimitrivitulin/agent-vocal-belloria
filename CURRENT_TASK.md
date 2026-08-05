@@ -1,6 +1,6 @@
 # BELL-030 — Agent conversationnel Telegram
 
-Statut: ready_for_review
+Statut: completed
 Branche: `codex/bell-030-agent-telegram`
 Dernière mise à jour: 2026-08-05
 
@@ -23,9 +23,9 @@ Brancher les commandes Telegram texte ou vocales au contexte prospect 360 et au 
 - 13 tests Worker réussis ; `git diff --check` réussi.
 - `/health` opérationnel, aucune migration distante restante et accès MCP anonyme refusé en `401`.
 - Message Telegram réel envoyé (`message_id=10`) et réponse unique reçue puis effacée (`command_id=602781224`).
-- Application Belloria actualisée : les six outils MCP sont visibles ; aller simple mesuré à environ 2 min 05 s.
+- Application Belloria actualisée : les six outils MCP sont visibles ; le besoin de voie rapide est transféré sans ambiguïté à BELL-033.
 - Diff, périmètre, secrets et artefacts contrôlés.
 
 ## Prochaine action
 
-Déclencher automatiquement le traitement interactif à la réception du webhook et ramener la latence mesurée sous deux minutes avant de passer BELL-030 à `completed`.
+Exécuter `BELL-033 — Voie rapide Telegram sous deux minutes` dans une tâche et une branche indépendantes.

@@ -2,7 +2,7 @@
 
 ## Priorité active — agent commercial Telegram
 
-Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → `BELL-031` → `BELL-032`.
+Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → `BELL-033` → `BELL-031` → `BELL-032`.
 
 - [x] **BELL-026 — Cadrage agent commercial Telegram** (`completed`)
   Architecture fonctionnelle, contexte prospect 360, référentiel commercial et lots de construction définis dans `docs/agent-commercial-telegram.md`.
@@ -22,10 +22,15 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Terminé lorsque** les scénarios représentatifs Belloria produisent une recommandation fondée sur le contexte et le référentiel, persuasive mais exacte, avec escalade humaine en cas de doute.
   Moteur déterministe livré avec diagnostic multi-dimensionnel, offres validées uniquement, options contextuelles limitées, questions bloquantes, actions, brouillons sûrs et escalade humaine explicite.
 
-- [ ] **BELL-030 — Agent conversationnel Telegram** (`ready_for_review`)
-  Permettre en texte ou vocal : « mes priorités », « résume ce prospect », « que lui proposer ? », « prépare une réponse », « prépare le devis », « relance-le », « mon planning du jour » et « où en est le CA ? ». Réduire la latence cible à moins de deux minutes ; conserver le passage horaire comme reprise de secours.
+- [x] **BELL-030 — Agent conversationnel Telegram** (`completed`)
+  Permettre en texte ou vocal : « mes priorités », « résume ce prospect », « que lui proposer ? », « prépare une réponse », « prépare le devis », « relance-le », « mon planning du jour » et « où en est le CA ? ». Conserver le passage horaire comme reprise de secours ; la voie rapide sous deux minutes relève de BELL-033.
   **Terminé lorsque** une conversation Telegram peut charger le bon contexte, proposer une action, obtenir la confirmation et exécuter uniquement l'action approuvée avec un compte rendu traçable.
-  Cœur conversationnel et stockage D1 des approbations livrés et déployés avec confirmation bornée à usage unique. L’aller-retour Telegram réel et les six outils MCP sont validés ; la mesure d’environ 2 min 05 s dépasse encore légèrement la cible et le traitement entrant doit être déclenché automatiquement avant clôture.
+  Cœur conversationnel, approbations D1, déploiement, aller-retour Telegram réel et six outils MCP validés. Le déclenchement interactif et la cible de latence sont isolés dans BELL-033 pour ne pas mêler contrat conversationnel et transport temps réel.
+
+- [ ] **BELL-033 — Voie rapide Telegram sous deux minutes** (`pending`)
+  Répondre immédiatement au webhook, puis traiter les commandes couvertes depuis un instantané prospect minimal et temporaire dans D1. Utiliser `waitUntil` tant que le traitement reste sous 30 secondes, conserver le passage horaire comme reprise et n’ajouter une Queue qu’après mesure démontrant sa nécessité.
+  **Terminé lorsque** une commande texte ou vocale représentative reçoit automatiquement une consultation ou une proposition traçable en moins de deux minutes, sans polling manuel, avec refus sûr si le contexte est absent, ambigu ou périmé.
+  **Frontières** : BELL-030 reste propriétaire des intentions et confirmations ; BELL-031 des règles anti-perte et priorités métier ; BELL-032 des KPI commerciaux. BELL-033 mesure seulement les latences techniques et ne conserve ni corps d’email ni conversation client durable dans D1.
 
 - [ ] **BELL-031 — Boucle anti-perte et suivi automatique** (`pending`)
   Détecter demandes sans réponse, relances échues, devis silencieux, acomptes attendus, événements proches ou passés et collisions avec une prestation confirmée. Générer le briefing Telegram et mettre à jour le CRM de façon idempotente.
@@ -48,8 +53,8 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
-- [ ] **BELL-016 — Bot Telegram privé sur Cloudflare** (`ready_for_review`)
-  Transport privé, commandes texte/vocales, D1, MCP et transcription déjà déployés. À clôturer comme fondation technique avant la validation de `BELL-030`.
+- [x] **BELL-016 — Bot Telegram privé sur Cloudflare** (`completed`)
+  Transport privé, commandes texte/vocales, D1, MCP et transcription déployés puis validés par l’aller-retour réel de BELL-030.
 - [x] **BELL-025 — Séparation clients actifs et anciens** (`completed`)
   Dates passées non honorées classées en perdu ; vues `Clients en cours` et `Clients anciens` créées et vérifiées.
 - [x] **BELL-024 — Reprise CRM des formulaires récents** (`completed`)
