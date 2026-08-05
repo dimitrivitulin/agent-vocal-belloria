@@ -2,7 +2,7 @@
 
 Statut: ready_for_review
 Branche: `codex/bell-034-webhook-tally`
-Dernière mise à jour: 2026-08-05
+Dernière mise à jour: 2026-08-06
 
 ## Objectif
 
@@ -26,8 +26,9 @@ Recevoir les soumissions Tally directement dans Cloudflare, sans utiliser leur n
 
 - 21 tests Worker et 77 tests Python réussis ; signature, filtrage de formulaire, rejeu et effacement après traitement sont couverts.
 - Migration D1 `0005_tally_submissions.sql` ajoutée.
-- Aucun service réel contacté et aucune donnée distante modifiée.
+- Migration appliquée et Worker `fef1d6f7-8035-4520-b462-5b44ed2f085b` déployé.
+- Test signé de production accepté puis donnée synthétique supprimée ; aucun service client contacté.
 
 ## Prochaine action
 
-Après accord : appliquer la migration, charger les secrets, déployer, puis connecter l'URL dans Tally et adapter la tâche ChatGPT Work.
+Connecter l'URL et le signing secret dans Tally, effectuer une soumission contrôlée, puis adapter la tâche ChatGPT Work.
