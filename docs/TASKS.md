@@ -38,9 +38,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Terminé lorsque** aucun prospect actif ne peut rester sans prochaine action datée et que les anomalies sont remontées sans doublon.
   Moteur déterministe et orchestrateur d'adaptation livrés avec priorités, corrections CRM atomiques, clés d'alertes stables et briefing Telegram dédupliqué. Les seuils sont documentés et 71 tests Python valident notamment le rejeu identique le lendemain.
 
-- [ ] **BELL-032 — Mesure et amélioration de la conversion** (`pending`)
+- [x] **BELL-032 — Mesure et amélioration de la conversion** (`completed`)
   Mesurer délai de première réponse, passage demande→devis, devis→confirmation, montant moyen, relances nécessaires, motifs de perte et fiabilité des recommandations. Constituer un jeu de cas de référence pour comparer les évolutions de l'agent.
   **Terminé lorsque** Telegram et Notion montrent les indicateurs utiles et qu'une modification de prompt, règle ou référentiel peut être évaluée avant activation.
+  Calcul déterministe livré avec populations explicites, preuves financières strictes, qualité des données, rendus Telegram/Notion sans effet externe et banc de non-régression avant activation.
 
 ## Principes non négociables
 

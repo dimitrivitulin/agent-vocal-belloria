@@ -1,34 +1,34 @@
-# BELL-031 — Boucle anti-perte et suivi automatique
+# BELL-032 — Mesure et amélioration de la conversion
 
 Statut: completed
-Branche: `codex/bell-031-boucle-anti-perte`
+Branche: `codex/bell-032-mesure-conversion`
 Dernière mise à jour: 2026-08-05
 
 ## Objectif
 
-Détecter les opportunités commerciales oubliées, garantir une prochaine action datée pour chaque prospect actif et produire un briefing Telegram sans doublon.
+Mesurer le parcours demande→devis→confirmation et évaluer toute évolution du moteur de conversion avant son activation.
 
 ## Périmètre
 
-- Détecter : demande sans réponse, relance échue, devis silencieux, acompte attendu, événement proche ou passé, collision avec une prestation confirmée.
-- Planifier une correction CRM idempotente lorsque la prochaine action ou son échéance manque ou est obsolète.
-- Dédupliquer les anomalies déjà signalées et rendre le briefing Telegram déterministe.
-- Ne pas mesurer les KPI de conversion, envoyer d’email ni contacter les services réels.
+- Calculer délai de première réponse, taux demande→devis, taux devis→confirmation, montant moyen, relances et motifs de perte.
+- Produire une synthèse déterministe adaptée à Telegram et des propriétés structurées pour Notion.
+- Constituer des cas de référence versionnés et comparer un moteur candidat à une référence.
+- Ne contacter aucun service réel et ne modifier aucune donnée distante.
 
 ## Critères de réussite
 
-- Toute opportunité non terminale obtient une prochaine action et une échéance.
-- Les six familles d’anomalies sont couvertes avec priorités et règles explicites.
-- Un second passage identique ne remonte aucun doublon et ne produit aucune mutation supplémentaire.
-- Tests Python et `git diff --check` réussissent.
+- Les KPI distinguent données absentes, population éligible et résultats observés.
+- Les montants respectent les preuves : devis envoyé pour le potentiel, facture pour le réalisé.
+- Une régression d’action, d’offre ou de garde-fou est visible avant activation.
+- Tests Python et Worker, `git diff --check` et examen du diff réussissent.
 
 ## Validation
 
-- 71 tests Python et 18 tests Worker réussis.
-- Les six familles métier, la clôture des événements passés, la priorité, le repli avec action datée et le briefing sont couverts.
-- Un rejeu identique, y compris le lendemain, ne remonte ni alerte ni mutation en double.
-- `git diff --check` réussi ; aucun service réel contacté et aucun secret ajouté.
+- 77 tests Python et 18 tests Worker réussis.
+- Calcul du funnel, populations vides, preuves financières et qualité des données couverts.
+- Trois scénarios de référence vérifient action, offre et revue humaine ; les régressions sont nommées.
+- Sorties Telegram/Notion pures, sans contact de service réel.
 
 ## Prochaine action
 
-Exécuter `BELL-032 — Mesure et amélioration de la conversion` dans une tâche et une branche indépendantes.
+Définir le prochain lot produit à partir des retours d'usage de l'agent commercial complet.
