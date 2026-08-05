@@ -1,24 +1,30 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import test from "node:test";
-import { extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler } from "../src/index.js";
+import { extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler, parseFastIntent } from "../src/index.js";
 
 globalThis.crypto ||= webcrypto;
 
 class FakeDb {
-  constructor() { this.rows = new Map(); this.actions = new Map(); }
+  constructor() { this.rows = new Map(); this.actions = new Map(); this.snapshots = new Map(); this.aliases = []; }
 
   prepare(sql) {
     const db = this;
     return {
+      sql, args: [],
       bind(...args) {
         return {
+          sql, args,
           run: async () => db.run(sql, args),
           all: async () => db.all(sql, args)
         };
       },
       all: async () => db.all(sql, [])
     };
+  }
+
+  async batch(statements) {
+    return Promise.all(statements.map((statement) => this.run(statement.sql, statement.args)));
   }
 
   run(sql, args) {
@@ -30,7 +36,9 @@ class FakeDb {
     }
 
     if (sql.startsWith("INSERT INTO telegram_action_approvals")) {
-      const [token, prospect, sources_json, content, consequence, modifier, source_command_id] = args;
+      const [token, prospect, sources_json, content, consequence] = args;
+      const modifier = args.length === 7 ? args[5] : "+10 minutes";
+      const source_command_id = args.length === 7 ? args[6] : args[5];
       if (this.actions.has(token)) return { meta: { changes: 0 } };
       if (this.rows.get(source_command_id)?.state !== "pending") return { meta: { changes: 0 } };
       const minutes = Number(String(modifier).match(/\d+/)?.[0] || 10);
@@ -39,6 +47,52 @@ class FakeDb {
         state: "pending", expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
         consumed_at: null, confirmation_command_id: null
       });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE telegram_commands SET started_at")) {
+      const row = this.rows.get(args[0]);
+      if (!row || row.state !== "pending" || row.replied_at) return { meta: { changes: 0 } };
+      row.started_at ||= new Date().toISOString();
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE telegram_commands SET state = 'completed', content = NULL, replied_at")) {
+      const row = this.rows.get(args[0]);
+      if (!row || row.state !== "pending") return { meta: { changes: 0 } };
+      Object.assign(row, { state: "completed", content: null, replied_at: new Date().toISOString(), latency_ms: 20 });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE telegram_commands SET last_error_code")) {
+      const [code, commandId] = args;
+      const row = this.rows.get(commandId);
+      if (row?.state === "pending") row.last_error_code = code;
+      return { meta: { changes: row?.state === "pending" ? 1 : 0 } };
+    }
+
+    if (sql.startsWith("UPDATE telegram_commands SET replied_at")) {
+      const row = this.rows.get(args[0]);
+      if (!row || row.state !== "pending") return { meta: { changes: 0 } };
+      Object.assign(row, { replied_at: new Date().toISOString(), latency_ms: 20, last_error_code: "fast_path_deferred" });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("INSERT INTO telegram_prospect_snapshots")) {
+      const [prospect_id, label, sources_json, summary, recommendation, reply_draft, quote_draft, follow_up_draft, contradictory, source_updated_at] = args;
+      this.snapshots.set(prospect_id, { prospect_id, label, sources_json, summary, recommendation, reply_draft, quote_draft, follow_up_draft, contradictory, source_updated_at, refreshed_at: new Date().toISOString(), expires_at: new Date(Date.now() + 90 * 60000).toISOString() });
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith("DELETE FROM telegram_prospect_aliases")) {
+      this.aliases = args.length ? this.aliases.filter((row) => row.prospect_id !== args[0]) : [];
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith("DELETE FROM telegram_prospect_snapshots")) {
+      this.snapshots.clear();
+      return { meta: { changes: 1 } };
+    }
+    if (sql.startsWith("INSERT INTO telegram_prospect_aliases")) {
+      this.aliases.push({ prospect_id: args[0], alias: args[1] });
       return { meta: { changes: 1 } };
     }
 
@@ -70,6 +124,11 @@ class FakeDb {
   }
 
   all(sql, args) {
+    if (sql.startsWith("SELECT s.* FROM telegram_prospect_snapshots")) {
+      const ids = this.aliases.filter((row) => row.alias === args[0]).map((row) => row.prospect_id);
+      const cutoff = Date.now() - 90 * 60000;
+      return { results: ids.map((id) => this.snapshots.get(id)).filter((row) => row && new Date(row.expires_at) > new Date() && new Date(row.refreshed_at).getTime() >= cutoff).slice(0, 2) };
+    }
     if (sql.startsWith("SELECT command_id")) {
       const limit = args[0];
       const results = [...this.rows.values()].filter((row) => ["pending", "quarantined"].includes(row.state)).slice(0, limit);
@@ -211,13 +270,140 @@ test("exposes provider-neutral Belloria tools after OAuth validation", async () 
   assert.equal((await handleRequest(mcpRequest(list), env)).status, 404);
   const response = await (await callMcp(list, env)).json();
   assert.deepEqual(response.result.tools.map((tool) => tool.name), [
-    "belloria_channel_status", "belloria_list_commands", "belloria_complete_command",
+    "belloria_channel_status", "belloria_refresh_prospect_snapshots", "belloria_list_commands", "belloria_complete_command",
     "belloria_propose_action", "belloria_consume_approved_action", "belloria_send_text"
   ]);
   assert.equal(JSON.stringify(response).includes("123456"), false);
 
   const status = await (await callMcp(toolCall(2, "belloria_channel_status"), env)).json();
   assert.deepEqual(JSON.parse(status.result.content[0].text), { provider: "telegram", configured: true, voice_transcription: true });
+});
+
+test("recognizes only the deterministic BELL-030 fast-path intents", () => {
+  assert.deepEqual(parseFastIntent("Résume Élodie"), { intent: "summary", query: "elodie" });
+  assert.deepEqual(parseFastIntent("Prépare une réponse Élodie"), { intent: "prepare_reply", query: "elodie" });
+  assert.deepEqual(parseFastIntent("CONFIRMER fast-123"), { intent: "confirm", query: null });
+  assert.equal(parseFastIntent("invente une offre"), null);
+});
+
+async function refreshSnapshot(env, overrides = {}) {
+  const snapshot = {
+    prospect_id: "p-1", label: "Élodie — mariage", aliases: ["Élodie", "elodie@example.test"],
+    sources: ["notion:p-1", "gmail:m-1"], summary: "Mariage de 80 personnes.",
+    recommendation: "Proposer le menu validé.", reply_draft: "Bonjour Élodie, voici la suite.",
+    quote_draft: "Préparer le devis Menu.", follow_up_draft: "Bonjour Élodie, avez-vous pu avancer ?",
+    source_updated_at: new Date().toISOString(), contradictory: false, ...overrides
+  };
+  const response = await (await callMcp(toolCall(40, "belloria_refresh_prospect_snapshots", { snapshots: [snapshot] }), env)).json();
+  return JSON.parse(response.result.content[0].text);
+}
+
+test("refreshes minimal snapshots and replies to a text command through waitUntil", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, options) => { sent.push(JSON.parse(options.body)); return Response.json({ ok: true, result: { message_id: 501 } }); };
+  try {
+    const env = environment();
+    assert.deepEqual(await refreshSnapshot(env), { refreshed: 1, expires_in_minutes: 90 });
+    const context = executionContext();
+    const update = textUpdate({ message: { message_id: 91, chat: { id: 123456 }, text: "Résume Élodie" } });
+    assert.deepEqual(await (await handleRequest(telegramRequest(update), env, context)).json(), { accepted: 1 });
+    await context.drain();
+    assert.match(sent[0].text, /Mariage de 80 personnes/);
+    const row = env.DB.rows.get("7001");
+    assert.equal(row.state, "completed");
+    assert.equal(row.content, null);
+    assert.ok(row.started_at && row.replied_at);
+    assert.equal(typeof row.latency_ms, "number");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("runs the same fast path after a voice transcription", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (url, options) => {
+    if (String(url).endsWith("/getFile")) return Response.json({ ok: true, result: { file_path: "voice/file.oga" } });
+    if (String(url).includes("/file/bot")) return new Response(new Uint8Array([1, 2, 3]));
+    if (String(url).endsWith("/sendMessage")) { sent.push(JSON.parse(options.body).text); return Response.json({ ok: true, result: { message_id: 504 } }); }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+  try {
+    const env = environment({ AI: { run: async () => ({ text: "Résume Élodie" }) } });
+    await refreshSnapshot(env);
+    const context = executionContext();
+    await handleRequest(telegramRequest(voiceUpdate()), env, context);
+    await context.drain();
+    assert.match(sent[0], /Mariage de 80 personnes/);
+    assert.equal(env.DB.rows.get("7002").state, "completed");
+    assert.equal(env.DB.rows.get("7002").voice_file_id, null);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("creates one traceable proposal and keeps replay idempotent", async () => {
+  const originalFetch = globalThis.fetch;
+  let sends = 0;
+  globalThis.fetch = async () => { sends += 1; return Response.json({ ok: true, result: { message_id: 502 } }); };
+  try {
+    const env = environment();
+    await refreshSnapshot(env);
+    const context = executionContext();
+    const update = textUpdate({ message: { message_id: 92, chat: { id: 123456 }, text: "Prépare une réponse Élodie" } });
+    await handleRequest(telegramRequest(update), env, context);
+    await context.drain();
+    const token = [...env.DB.actions.keys()][0];
+    assert.match(token, /^FAST-[A-F0-9]{12}$/);
+    assert.equal(env.DB.actions.get(token).content, "Bonjour Élodie, voici la suite.");
+    assert.equal(sends, 1);
+    assert.deepEqual(await (await handleRequest(telegramRequest(update), env, executionContext())).json(), { accepted: 0 });
+    assert.equal(sends, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("refuses stale, ambiguous and contradictory snapshots safely", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, options) => { sent.push(JSON.parse(options.body).text); return Response.json({ ok: true, result: { message_id: 503 } }); };
+  try {
+    for (const scenario of ["stale", "ambiguous", "contradictory"]) {
+      const env = environment();
+      await refreshSnapshot(env, scenario === "contradictory" ? { contradictory: true } : {});
+      if (scenario === "stale") env.DB.snapshots.get("p-1").expires_at = "2020-01-01T00:00:00Z";
+      if (scenario === "ambiguous") {
+        const base = {
+          sources: ["notion:p"], summary: "Résumé", recommendation: "Action",
+          source_updated_at: new Date().toISOString(), contradictory: false
+        };
+        await callMcp(toolCall(42, "belloria_refresh_prospect_snapshots", { snapshots: [
+          { ...base, prospect_id: "p-1", label: "Élodie A", aliases: ["Élodie"] },
+          { ...base, prospect_id: "p-2", label: "Élodie B", aliases: ["Élodie"] }
+        ] }), env);
+      }
+      const context = executionContext();
+      const update = textUpdate({ update_id: 7100 + sent.length, message: { message_id: 100 + sent.length, chat: { id: 123456 }, text: "Résume Élodie" } });
+      await handleRequest(telegramRequest(update), env, context);
+      await context.drain();
+    }
+    assert.match(sent[0], /absent ou périmé/);
+    assert.match(sent[1], /ambigu/);
+    assert.match(sent[2], /contradictoire/);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("keeps a command pending for hourly recovery when Telegram fails", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("down", { status: 503 });
+  try {
+    const env = environment();
+    await refreshSnapshot(env);
+    const context = executionContext();
+    const update = textUpdate({ update_id: 7200, message: { message_id: 120, chat: { id: 123456 }, text: "Résume Élodie" } });
+    await handleRequest(telegramRequest(update), env, context);
+    await context.drain();
+    assert.equal(env.DB.rows.get("7200").state, "pending");
+    assert.equal(env.DB.rows.get("7200").last_error_code, "telegram_http_503");
+    const listed = await (await callMcp(toolCall(41, "belloria_list_commands", { limit: 5 }), env)).json();
+    assert.equal(JSON.parse(listed.result.content[0].text).commands[0].command_id, "7200");
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("completes the stateless MCP initialization handshake", async () => {

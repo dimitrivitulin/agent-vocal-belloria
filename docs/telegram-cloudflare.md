@@ -11,6 +11,14 @@ Architecture :
 3. Un texte devient immédiatement une commande en attente. Un vocal de 5 Mio maximum est téléchargé, transcrit en français par Workers AI puis supprimé de la mémoire.
 4. ChatGPT Work lit et termine les commandes via le MCP, puis peut envoyer une réponse ou un rapport au chat fixe après confirmation.
 
+## Voie rapide et données temporaires
+
+La migration `0004_telegram_fast_path.sql` ajoute les horodatages techniques `started_at`, `replied_at` et `latency_ms`, ainsi que deux tables temporaires : instantanés prospect et alias normalisés. Un rafraîchissement MCP remplace l'ensemble précédent, expire après 90 minutes et n'accepte que des résumés, recommandations, brouillons structurés et identifiants de sources. Aucun corps d'email, conversation client ou fichier audio n'est conservé dans ce cache.
+
+Après l'ingestion texte ou la transcription vocale, `ctx.waitUntil` lance la voie rapide. Les intentions restent celles de BELL-030 et sont reconnues de façon déterministe. Workers AI sert uniquement à transcrire le vocal, jamais à produire un fait. Un instantané absent, périmé, ambigu ou contradictoire entraîne un refus sûr. Une proposition crée la même approbation D1 à usage unique et valable dix minutes que BELL-030. Les confirmations et les commandes échouées restent disponibles pour la reprise horaire.
+
+ChatGPT Work remplace les instantanés des prospects actifs avec l'outil `belloria_refresh_prospect_snapshots`. Les journaux ne contiennent que l'identifiant technique de commande, l'événement, le code d'erreur borné et l'indication que la latence a été enregistrée ; ni texte, ni prospect, ni source n'y figurent. Une Queue n'est pas configurée : aucune mesure ne démontre actuellement que `waitUntil` soit insuffisant.
+
 ## Environnement de test déployé
 
 Le Worker `belloria-assistant` est disponible sur `https://belloria-assistant.belloria-dvitulin.workers.dev`. La migration D1 `0002_telegram_commands.sql` est appliquée, le binding Workers AI est actif et le bot privé `@BelloriaAssistantTestBot` est enregistré. Les quatre secrets et le webhook sont configurés depuis BELL-017 ; leurs valeurs restent uniquement dans les stockages protégés locaux et Cloudflare.

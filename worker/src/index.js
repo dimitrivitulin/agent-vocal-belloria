@@ -1,12 +1,45 @@
 const TELEGRAM_VOICE_MAX_BYTES = 5 * 1024 * 1024;
 const TELEGRAM_TEXT_MAX_CHARS = 4096;
 const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo";
+const SNAPSHOT_MAX_AGE_MINUTES = 90;
+const SNAPSHOT_MAX_ITEMS = 100;
 
 const TOOLS = [
   {
     name: "belloria_channel_status",
     description: "Read whether the private Belloria Telegram channel is configured.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false }
+  },
+  {
+    name: "belloria_refresh_prospect_snapshots",
+    description: "Replace the short-lived D1 snapshots used by the Telegram fast path after the hourly sourced CRM pass.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        snapshots: {
+          type: "array", maxItems: SNAPSHOT_MAX_ITEMS,
+          items: {
+            type: "object",
+            properties: {
+              prospect_id: { type: "string", minLength: 1, maxLength: 100 },
+              label: { type: "string", minLength: 1, maxLength: 200 },
+              aliases: { type: "array", minItems: 1, maxItems: 10, items: { type: "string", minLength: 1, maxLength: 100 } },
+              sources: { type: "array", minItems: 1, maxItems: 20, items: { type: "string", minLength: 1, maxLength: 300 } },
+              summary: { type: "string", minLength: 1, maxLength: 1500 },
+              recommendation: { type: "string", minLength: 1, maxLength: 1500 },
+              reply_draft: { type: "string", maxLength: 2000 },
+              quote_draft: { type: "string", maxLength: 2000 },
+              follow_up_draft: { type: "string", maxLength: 2000 },
+              contradictory: { type: "boolean" },
+              source_updated_at: { type: "string", format: "date-time" }
+            },
+            required: ["prospect_id", "label", "aliases", "sources", "summary", "recommendation", "source_updated_at"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["snapshots"], additionalProperties: false
+    }
   },
   {
     name: "belloria_list_commands",
@@ -190,12 +223,107 @@ async function transcribeVoice(env, command) {
     await env.DB.prepare(
       "UPDATE telegram_commands SET content = ?, voice_file_id = NULL, state = 'pending', updated_at = CURRENT_TIMESTAMP, last_error_code = NULL WHERE command_id = ? AND state = 'transcribing'"
     ).bind(text, command.id).run();
+    await runFastPath(env, command.id, text);
   } catch (error) {
     const code = cleanErrorCode(error, "voice_transcription_failed");
     await env.DB.prepare(
       "UPDATE telegram_commands SET voice_file_id = NULL, state = 'quarantined', updated_at = CURRENT_TIMESTAMP, last_error_code = ? WHERE command_id = ? AND state = 'transcribing'"
     ).bind(code, command.id).run();
     console.log(JSON.stringify({ event: "telegram_voice_quarantined", code }));
+  }
+}
+
+function normalizeQuery(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9@+]+/g, " ").trim();
+}
+
+export function parseFastIntent(text) {
+  const normalized = normalizeQuery(text);
+  if (normalized.startsWith("confirmer ")) return { intent: "confirm", query: null };
+  if (normalized.includes("priorit")) return { intent: "priorities", query: null };
+  if (normalized.includes("planning")) return { intent: "planning", query: null };
+  if (/\bca\b/.test(normalized) || normalized.includes("chiffre d affaire")) return { intent: "revenue", query: null };
+  const patterns = [
+    ["prepare_quote", ["prepare le devis"]], ["prepare_reply", ["prepare une reponse"]],
+    ["follow_up", ["relance"]], ["summary", ["resume"]],
+    ["recommendation", ["proposer", "recommande", "que lui"]]
+  ];
+  for (const [intent, markers] of patterns) {
+    for (const marker of markers) {
+      const index = normalized.indexOf(marker);
+      if (index >= 0) return { intent, query: normalized.slice(index + marker.length).trim() || null };
+    }
+  }
+  return null;
+}
+
+async function markFastStarted(env, commandId) {
+  const result = await env.DB.prepare(
+    "UPDATE telegram_commands SET started_at = COALESCE(started_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE command_id = ? AND state = 'pending' AND replied_at IS NULL"
+  ).bind(commandId).run();
+  return Number(result.meta?.changes || 0) === 1;
+}
+
+async function loadFreshSnapshot(env, query) {
+  const result = await env.DB.prepare(
+    "SELECT s.* FROM telegram_prospect_snapshots s JOIN telegram_prospect_aliases a ON a.prospect_id = s.prospect_id WHERE a.alias = ? AND s.expires_at > CURRENT_TIMESTAMP AND s.refreshed_at >= datetime('now', ?) ORDER BY s.prospect_id LIMIT 2"
+  ).bind(normalizeQuery(query), `-${SNAPSHOT_MAX_AGE_MINUTES} minutes`).all();
+  return result.results || [];
+}
+
+async function fastToken(commandId) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`belloria-fast:${commandId}`));
+  return `FAST-${toHex(digest).slice(0, 12).toUpperCase()}`;
+}
+
+function safeRefusal(reason) {
+  return { text: `Je ne peux pas traiter cette demande par la voie rapide (${reason}). Elle reste disponible pour la reprise horaire.`, completed: false };
+}
+
+async function buildFastReply(env, commandId, text) {
+  const parsed = parseFastIntent(text);
+  if (!parsed) return safeRefusal("intention non reconnue");
+  if (parsed.intent === "confirm") return null;
+  if (["priorities", "planning", "revenue"].includes(parsed.intent)) return safeRefusal("contexte global non présent dans l'instantané prospect");
+  if (!parsed.query) return safeRefusal("prospect manquant");
+  const matches = await loadFreshSnapshot(env, parsed.query);
+  if (matches.length !== 1) return safeRefusal(matches.length ? "prospect ambigu" : "contexte absent ou périmé");
+  const snapshot = matches[0];
+  if (snapshot.contradictory) return safeRefusal("contexte contradictoire");
+  if (parsed.intent === "summary") return { text: `${snapshot.label}\n${snapshot.summary}\nSources : ${JSON.parse(snapshot.sources_json).join(", ")}`, completed: true };
+  if (parsed.intent === "recommendation") return { text: `${snapshot.label}\n${snapshot.recommendation}\nSources : ${JSON.parse(snapshot.sources_json).join(", ")}`, completed: true };
+  const field = { prepare_reply: "reply_draft", prepare_quote: "quote_draft", follow_up: "follow_up_draft" }[parsed.intent];
+  const content = snapshot[field];
+  if (!content) return safeRefusal("proposition non disponible");
+  const consequence = {
+    prepare_reply: "Créer un brouillon de réponse, sans l’envoyer.",
+    prepare_quote: "Passer le dossier en devis à préparer, sans envoyer de devis.",
+    follow_up: "Créer un brouillon de relance, sans l’envoyer."
+  }[parsed.intent];
+  const token = await fastToken(commandId);
+  await env.DB.prepare(
+    "INSERT INTO telegram_action_approvals (token, source_command_id, prospect, sources_json, content, consequence, expires_at) SELECT ?, command_id, ?, ?, ?, ?, datetime('now', '+10 minutes') FROM telegram_commands WHERE command_id = ? AND state = 'pending' ON CONFLICT(token) DO NOTHING"
+  ).bind(token, snapshot.label, snapshot.sources_json, content, consequence, commandId).run();
+  return { text: `Action proposée pour ${snapshot.label}\nSources : ${JSON.parse(snapshot.sources_json).join(", ")}\nContenu exact : ${content}\nConséquence : ${consequence}\nPour approuver : CONFIRMER ${token}`, completed: true };
+}
+
+async function runFastPath(env, commandId, text) {
+  if (!await markFastStarted(env, commandId)) return;
+  try {
+    const reply = await buildFastReply(env, commandId, text);
+    if (!reply) return;
+    await sendText(env, reply.text);
+    const sql = reply.completed
+      ? "UPDATE telegram_commands SET state = 'completed', content = NULL, replied_at = CURRENT_TIMESTAMP, latency_ms = CAST((julianday(CURRENT_TIMESTAMP) - julianday(created_at)) * 86400000 AS INTEGER), updated_at = CURRENT_TIMESTAMP WHERE command_id = ? AND state = 'pending'"
+      : "UPDATE telegram_commands SET replied_at = CURRENT_TIMESTAMP, latency_ms = CAST((julianday(CURRENT_TIMESTAMP) - julianday(created_at)) * 86400000 AS INTEGER), last_error_code = 'fast_path_deferred', updated_at = CURRENT_TIMESTAMP WHERE command_id = ? AND state = 'pending'";
+    await env.DB.prepare(sql).bind(commandId).run();
+    console.log(JSON.stringify({ event: "telegram_fast_path_replied", command_id: commandId, latency_recorded: true }));
+  } catch (error) {
+    const code = cleanErrorCode(error, "fast_path_failed");
+    await env.DB.prepare(
+      "UPDATE telegram_commands SET last_error_code = ?, updated_at = CURRENT_TIMESTAMP WHERE command_id = ? AND state = 'pending'"
+    ).bind(code, commandId).run();
+    console.log(JSON.stringify({ event: "telegram_fast_path_failed", command_id: commandId, code }));
   }
 }
 
@@ -214,13 +342,52 @@ async function telegramWebhook(request, env, context) {
   }
 
   const inserted = await storeTelegramCommand(env.DB, command);
-  if (inserted && command.kind === "voice") {
-    const work = transcribeVoice(env, command);
-    if (context?.waitUntil) context.waitUntil(work);
-    else await work;
+  if (inserted) {
+    if (command.kind === "voice") {
+      const work = transcribeVoice(env, command);
+      if (context?.waitUntil) context.waitUntil(work);
+      else await work;
+    } else if (context?.waitUntil) {
+      context.waitUntil(runFastPath(env, command.id, command.content));
+    }
   }
   console.log(JSON.stringify({ event: "telegram_webhook_ingested", accepted: inserted ? 1 : 0, kind: command.kind }));
   return json({ accepted: inserted ? 1 : 0 });
+}
+
+function validateSnapshot(item) {
+  const limits = { prospect_id: 100, label: 200, summary: 1500, recommendation: 1500, reply_draft: 2000, quote_draft: 2000, follow_up_draft: 2000 };
+  const allowed = new Set([...Object.keys(limits), "aliases", "sources", "contradictory", "source_updated_at"]);
+  if (!item || typeof item !== "object" || Object.keys(item).some((key) => !allowed.has(key))) throw new Error("snapshot contains unsupported fields");
+  for (const [key, maximum] of Object.entries(limits)) {
+    const value = item[key];
+    const optional = key.endsWith("_draft");
+    if ((!optional && (typeof value !== "string" || !value.trim())) || (value !== undefined && (typeof value !== "string" || value.length > maximum))) throw new Error(`${key} is invalid`);
+  }
+  if (!Array.isArray(item.aliases) || !item.aliases.length || item.aliases.length > 10 || item.aliases.some((value) => typeof value !== "string" || !value.trim() || value.length > 100)) throw new Error("snapshot aliases are invalid");
+  if (!Array.isArray(item.sources) || !item.sources.length || item.sources.length > 20 || item.sources.some((value) => typeof value !== "string" || !value.trim() || value.length > 300)) throw new Error("snapshot sources are invalid");
+  if (item.contradictory !== undefined && typeof item.contradictory !== "boolean") throw new Error("contradictory must be a boolean");
+  const sourceDate = new Date(item.source_updated_at);
+  if (Number.isNaN(sourceDate.getTime())) throw new Error("source_updated_at must be an ISO date-time");
+}
+
+async function refreshSnapshots(env, snapshots) {
+  if (!Array.isArray(snapshots) || snapshots.length > SNAPSHOT_MAX_ITEMS) throw new Error(`snapshots must contain at most ${SNAPSHOT_MAX_ITEMS} items`);
+  for (const item of snapshots) validateSnapshot(item);
+  const batch = [
+    env.DB.prepare("DELETE FROM telegram_prospect_aliases"),
+    env.DB.prepare("DELETE FROM telegram_prospect_snapshots")
+  ];
+  for (const item of snapshots) {
+    batch.push(env.DB.prepare(
+      "INSERT INTO telegram_prospect_snapshots (prospect_id, label, sources_json, summary, recommendation, reply_draft, quote_draft, follow_up_draft, contradictory, source_updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+90 minutes')) ON CONFLICT(prospect_id) DO UPDATE SET label=excluded.label, sources_json=excluded.sources_json, summary=excluded.summary, recommendation=excluded.recommendation, reply_draft=excluded.reply_draft, quote_draft=excluded.quote_draft, follow_up_draft=excluded.follow_up_draft, contradictory=excluded.contradictory, source_updated_at=excluded.source_updated_at, refreshed_at=CURRENT_TIMESTAMP, expires_at=excluded.expires_at"
+    ).bind(item.prospect_id, item.label.trim(), JSON.stringify(item.sources), item.summary.trim(), item.recommendation.trim(), item.reply_draft?.trim() || null, item.quote_draft?.trim() || null, item.follow_up_draft?.trim() || null, item.contradictory ? 1 : 0, item.source_updated_at));
+    for (const alias of new Set(item.aliases.map(normalizeQuery).filter(Boolean))) {
+      batch.push(env.DB.prepare("INSERT INTO telegram_prospect_aliases (prospect_id, alias) VALUES (?, ?)").bind(item.prospect_id, alias));
+    }
+  }
+  if (batch.length) await env.DB.batch(batch);
+  return { refreshed: snapshots.length, expires_in_minutes: SNAPSHOT_MAX_AGE_MINUTES };
 }
 
 function rpcResult(id, result) { return json({ jsonrpc: "2.0", id, result }); }
@@ -322,6 +489,8 @@ async function mcp(request, env) {
         configured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET && env.TELEGRAM_ALLOWED_CHAT_ID),
         voice_transcription: Boolean(env.AI)
       };
+    } else if (name === "belloria_refresh_prospect_snapshots") {
+      value = await refreshSnapshots(env, args.snapshots);
     } else if (name === "belloria_list_commands") {
       const limit = args.limit === undefined ? 10 : args.limit;
       if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error("limit must be an integer from 1 to 20");

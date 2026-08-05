@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class D1MigrationTests(unittest.TestCase):
     def test_action_approval_schema_supports_atomic_confirmation(self):
         database = sqlite3.connect(":memory:")
-        for migration in ("0002_telegram_commands.sql", "0003_telegram_action_approvals.sql"):
+        for migration in ("0002_telegram_commands.sql", "0003_telegram_action_approvals.sql", "0004_telegram_fast_path.sql"):
             database.executescript((ROOT / "worker" / "migrations" / migration).read_text(encoding="utf-8"))
         database.execute(
             "INSERT INTO telegram_commands (command_id, message_id, command_kind, content, state) VALUES (?, ?, ?, ?, ?)",
@@ -33,6 +33,28 @@ class D1MigrationTests(unittest.TestCase):
             ("2", "2"),
         ).fetchone()
         self.assertEqual(("ABC123",), row)
+
+    def test_fast_path_schema_keeps_structured_expiring_snapshots_and_latency(self):
+        database = sqlite3.connect(":memory:")
+        for migration in ("0002_telegram_commands.sql", "0003_telegram_action_approvals.sql", "0004_telegram_fast_path.sql"):
+            database.executescript((ROOT / "worker" / "migrations" / migration).read_text(encoding="utf-8"))
+        database.execute(
+            "INSERT INTO telegram_prospect_snapshots "
+            "(prospect_id, label, sources_json, summary, recommendation, source_updated_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+90 minutes'))",
+            ("p-1", "Prospect test", '["notion:p-1"]', "Résumé structuré", "Action validée"),
+        )
+        database.execute("INSERT INTO telegram_prospect_aliases VALUES (?, ?)", ("p-1", "prospect test"))
+        columns = {row[1] for row in database.execute("PRAGMA table_info(telegram_commands)")}
+        self.assertTrue({"created_at", "started_at", "replied_at", "latency_ms"}.issubset(columns))
+        self.assertEqual(
+            ("p-1", "notion:p-1"),
+            database.execute(
+                "SELECT s.prospect_id, json_extract(s.sources_json, '$[0]') "
+                "FROM telegram_prospect_snapshots s JOIN telegram_prospect_aliases a USING (prospect_id) WHERE a.alias = ?",
+                ("prospect test",),
+            ).fetchone(),
+        )
 
 
 if __name__ == "__main__":
