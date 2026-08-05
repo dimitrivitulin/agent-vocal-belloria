@@ -1,31 +1,37 @@
-# BELL-030 — Agent conversationnel Telegram
+# BELL-033 — Voie rapide Telegram sous deux minutes
 
 Statut: completed
-Branche: `codex/bell-030-agent-telegram`
+Branche: `codex/bell-033-voie-rapide-sous-deux-minutes`
 Dernière mise à jour: 2026-08-05
 
 ## Objectif
 
-Brancher les commandes Telegram texte ou vocales au contexte prospect 360 et au moteur de conversion, avec confirmation explicite avant toute mutation.
+Répondre automatiquement aux commandes Telegram couvertes depuis un instantané prospect minimal et temporaire dans D1, tout en conservant le passage horaire comme reprise.
 
-## Résultat livré
+## Périmètre
 
-- Orchestrateur commun aux commandes texte et aux transcriptions vocales.
-- Consultations, résolution non ambiguë, contexte 360 et recommandations du moteur de conversion.
-- Proposition traçable avec contenu exact, conséquence, sources et approbation à usage unique valable dix minutes.
-- Adaptateurs injectés pour isoler Gmail, Notion et Telegram ; aucun service réel contacté par les tests.
-- Stockage D1 des propositions et consommation atomique d’une confirmation Telegram exacte, avec expiration et protection contre le rejeu.
-- Migration D1 `0003` et Worker déployés en production, version `f9b33df6-98ed-4ae3-b2ca-e01619dedba0`.
+- Accuser réception du webhook avant le traitement avec `waitUntil`.
+- Alimenter via MCP un instantané D1 sans corps d’email ni conversation durable.
+- Résoudre une consultation ou proposition traçable depuis un instantané frais et non ambigu.
+- Refuser sûrement les contextes absents, ambigus ou périmés sans terminer la commande.
+- Mesurer la latence technique ; ne pas ajouter de Queue, de règles anti-perte ni de KPI métier.
+
+## Critères de réussite
+
+- Texte et vocal suivent automatiquement la voie rapide après ingestion ou transcription.
+- Une réponse Telegram représentative part en moins de deux minutes sans polling manuel.
+- Les données temporaires expirent et les cas refusés restent disponibles pour la reprise horaire.
+- Tests Worker, suite Python et `git diff --check` réussissent.
 
 ## Validation
 
-- 63 tests Python réussis, dont 8 scénarios conversationnels dédiés et le contrat SQL D1 réel.
-- 13 tests Worker réussis ; `git diff --check` réussi.
-- `/health` opérationnel, aucune migration distante restante et accès MCP anonyme refusé en `401`.
-- Message Telegram réel envoyé (`message_id=10`) et réponse unique reçue puis effacée (`command_id=602781224`).
-- Application Belloria actualisée : les six outils MCP sont visibles ; le besoin de voie rapide est transféré sans ambiguïté à BELL-033.
-- Diff, périmètre, secrets et artefacts contrôlés.
+- 18 tests Worker et 64 tests Python réussis ; migration D1 locale et dry-run Wrangler réussis.
+- Migration `0004` appliquée à D1 distant ; Worker `91e13a96-4414-4e4e-a201-2898a9e87ea5` déployé.
+- `/health` répond `200`, MCP anonyme refusé en `401`, aucune migration distante restante.
+- Aller-retour Telegram synthétique : webhook en 191 ms, réponse `completed/replied` dans la même seconde ; données de test nettoyées.
+- Un essai sans contexte a produit le refus sûr attendu et révélé puis couvert le passage explicite du contexte `waitUntil` dans l’entrypoint.
+- `git diff --check` réussi ; diff limité au lot, sans secret ni artefact suivi.
 
 ## Prochaine action
 
-Exécuter `BELL-033 — Voie rapide Telegram sous deux minutes` dans une tâche et une branche indépendantes.
+Exécuter `BELL-031 — Boucle anti-perte et suivi automatique` dans une tâche et une branche indépendantes.

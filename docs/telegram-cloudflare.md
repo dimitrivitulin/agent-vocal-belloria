@@ -9,7 +9,8 @@ Architecture :
 1. Telegram envoie une mise à jour HTTPS à `POST /webhooks/telegram` avec un secret de webhook.
 2. Le Worker refuse les chats non autorisés et insère chaque `update_id` une seule fois dans D1.
 3. Un texte devient immédiatement une commande en attente. Un vocal de 5 Mio maximum est téléchargé, transcrit en français par Workers AI puis supprimé de la mémoire.
-4. ChatGPT Work lit et termine les commandes via le MCP, puis peut envoyer une réponse ou un rapport au chat fixe après confirmation.
+4. Le Worker répond aux intentions couvertes depuis un instantané D1 temporaire et frais ; les autres commandes restent disponibles pour le passage ChatGPT Work horaire.
+5. Toute mutation reste une proposition et exige une confirmation Telegram exacte avant exécution.
 
 ## Environnement de test déployé
 
@@ -46,6 +47,7 @@ Le script de préparation ne journalise jamais le jeton, les messages ou les nom
 - Une nouvelle commande apparaît via `belloria_list_commands` ; une livraison répétée du même `update_id` n'ajoute rien. Un vocal refusé apparaît avec `status=quarantined` et un code d'erreur sans contenu audio.
 - `belloria_complete_command` efface le texte après confirmation.
 - `belloria_send_text` ignore tout destinataire externe et envoie uniquement au chat configuré après confirmation.
+- `belloria_refresh_fast_snapshots` remplace atomiquement les instantanés temporaires ; un contexte absent, ambigu ou périmé est refusé sans perdre la commande.
 
 ## Retour arrière
 

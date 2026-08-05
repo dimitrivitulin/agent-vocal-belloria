@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import test from "node:test";
-import { extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler } from "../src/index.js";
+import { createWorkerEntrypoint, extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler } from "../src/index.js";
 
 globalThis.crypto ||= webcrypto;
 
 class FakeDb {
-  constructor() { this.rows = new Map(); this.actions = new Map(); }
+  constructor() { this.rows = new Map(); this.actions = new Map(); this.snapshots = new Map(); }
 
   prepare(sql) {
     const db = this;
@@ -19,6 +19,12 @@ class FakeDb {
       },
       all: async () => db.all(sql, [])
     };
+  }
+
+  async batch(statements) {
+    const results = [];
+    for (const statement of statements) results.push(await statement.run());
+    return results;
   }
 
   run(sql, args) {
@@ -39,6 +45,39 @@ class FakeDb {
         state: "pending", expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
         consumed_at: null, confirmation_command_id: null
       });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("DELETE FROM telegram_prospect_snapshots")) {
+      const changes = this.snapshots.size;
+      this.snapshots.clear();
+      return { meta: { changes } };
+    }
+
+    if (sql.startsWith("INSERT INTO telegram_prospect_snapshots")) {
+      const [prospect_id, label, aliases_json, summary, recommendation, actions_json, sources_json, generated_at, expiryBase, modifier] = args;
+      const minutes = Number(String(modifier).match(/\d+/)?.[0] || 90);
+      this.snapshots.set(prospect_id, {
+        prospect_id, label, aliases_json, summary, recommendation, actions_json, sources_json, generated_at,
+        expires_at: new Date(Date.parse(expiryBase) + minutes * 60000).toISOString(), updated_at: new Date().toISOString()
+      });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.includes("fast_path_state = 'processing'")) {
+      const [commandId] = args;
+      const row = this.rows.get(commandId);
+      if (!row || row.state !== "pending" || row.fast_path_state) return { meta: { changes: 0 } };
+      Object.assign(row, { fast_path_state: "processing", fast_path_started_at: new Date().toISOString(), fast_path_error_code: null });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE telegram_commands SET fast_path_state = ?")) {
+      const [fast_path_state, fast_path_error_code, commandId] = args;
+      const row = this.rows.get(commandId);
+      if (!row || row.state !== "pending") return { meta: { changes: 0 } };
+      Object.assign(row, { fast_path_state, fast_path_error_code, fast_path_finished_at: new Date().toISOString() });
+      if (sql.includes("state = 'completed'")) Object.assign(row, { state: "completed", content: null });
       return { meta: { changes: 1 } };
     }
 
@@ -70,6 +109,7 @@ class FakeDb {
   }
 
   all(sql, args) {
+    if (sql.startsWith("SELECT prospect_id")) return { results: [...this.snapshots.values()].slice(0, args[0]) };
     if (sql.startsWith("SELECT command_id")) {
       const limit = args[0];
       const results = [...this.rows.values()].filter((row) => ["pending", "quarantined"].includes(row.state)).slice(0, limit);
@@ -212,12 +252,152 @@ test("exposes provider-neutral Belloria tools after OAuth validation", async () 
   const response = await (await callMcp(list, env)).json();
   assert.deepEqual(response.result.tools.map((tool) => tool.name), [
     "belloria_channel_status", "belloria_list_commands", "belloria_complete_command",
-    "belloria_propose_action", "belloria_consume_approved_action", "belloria_send_text"
+    "belloria_refresh_fast_snapshots", "belloria_propose_action",
+    "belloria_consume_approved_action", "belloria_send_text"
   ]);
   assert.equal(JSON.stringify(response).includes("123456"), false);
 
   const status = await (await callMcp(toolCall(2, "belloria_channel_status"), env)).json();
   assert.deepEqual(JSON.parse(status.result.content[0].text), { provider: "telegram", configured: true, voice_transcription: true });
+});
+
+test("refreshes temporary snapshots and completes a fast consultation in waitUntil", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, options) => {
+    sent.push(JSON.parse(options.body));
+    return Response.json({ ok: true, result: { message_id: 101 } });
+  };
+  try {
+    const env = environment();
+    const refreshed = await (await callMcp(toolCall(30, "belloria_refresh_fast_snapshots", {
+      expires_in_minutes: 90,
+      snapshots: [{
+        prospect_id: "p-1", label: "Élodie — mariage", aliases: ["Élodie", "mariage Élodie"],
+        summary: "Élodie : mariage, 80 convives, dossier qualifié.",
+        recommendation: "Proposer le Cocktail validé.", actions: {},
+        sources: ["crm:p-1", "tally:m-1"], generated_at: new Date().toISOString()
+      }]
+    }), env)).json();
+    assert.deepEqual(JSON.parse(refreshed.result.content[0].text), { refreshed: 1, expires_in_minutes: 90 });
+
+    const context = executionContext();
+    const update = textUpdate({ update_id: 7100, message: { message_id: 90, chat: { id: 123456 }, text: "Résume Élodie" } });
+    assert.deepEqual(await (await handleRequest(telegramRequest(update), env, context)).json(), { accepted: 1 });
+    await context.drain();
+    assert.equal(sent[0].text, "Élodie : mariage, 80 convives, dossier qualifié.");
+    assert.equal(env.DB.rows.get("7100").state, "completed");
+    assert.equal(env.DB.rows.get("7100").content, null);
+    assert.equal(env.DB.rows.get("7100").fast_path_state, "replied");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("entry forwards the execution context required by the deployed fast path", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, options) => {
+    sent.push(JSON.parse(options.body).text);
+    return Response.json({ ok: true, result: { message_id: 105 } });
+  };
+  try {
+    const env = environment();
+    env.DB.snapshots.set("p-entry", {
+      prospect_id: "p-entry", label: "Nina — test", aliases_json: JSON.stringify(["Nina"]),
+      summary: "Résumé via entry", recommendation: "Reco", actions_json: "{}", sources_json: "[]",
+      expires_at: "2099-01-01T00:00:00Z", updated_at: new Date().toISOString()
+    });
+    const context = executionContext();
+    const update = textUpdate({ update_id: 7150, message: { message_id: 95, chat: { id: 123456 }, text: "Résume Nina" } });
+    const entrypoint = createWorkerEntrypoint({ fetch: async () => { throw new Error("OAuth must not handle Telegram"); } });
+    const response = await entrypoint.fetch(telegramRequest(update), env, context);
+    assert.deepEqual(await response.json(), { accepted: 1 });
+    await context.drain();
+    assert.deepEqual(sent, ["Résumé via entry"]);
+    assert.equal(env.DB.rows.get("7150").fast_path_state, "replied");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("routes a transcribed voice through the same fast path", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (url, options) => {
+    if (String(url).endsWith("/getFile")) return Response.json({ ok: true, result: { file_path: "voice/file.oga" } });
+    if (String(url).includes("/file/bot")) return new Response(new Uint8Array([1, 2, 3]));
+    sent.push(JSON.parse(options.body).text);
+    return Response.json({ ok: true, result: { message_id: 104 } });
+  };
+  try {
+    const env = environment({ AI: { run: async () => ({ text: "Résume Élodie" }) } });
+    env.DB.snapshots.set("p-voice", {
+      prospect_id: "p-voice", label: "Élodie — mariage", aliases_json: JSON.stringify(["Élodie"]),
+      summary: "Résumé vocal rapide", recommendation: "Reco", actions_json: "{}", sources_json: "[]",
+      expires_at: "2099-01-01T00:00:00Z", updated_at: new Date().toISOString()
+    });
+    const context = executionContext();
+    await handleRequest(telegramRequest(voiceUpdate()), env, context);
+    await context.drain();
+    assert.deepEqual(sent, ["Résumé vocal rapide"]);
+    assert.equal(env.DB.rows.get("7002").state, "completed");
+    assert.equal(env.DB.rows.get("7002").voice_file_id, null);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("defers absent, expired and ambiguous fast contexts without completing commands", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, options) => {
+    sent.push(JSON.parse(options.body).text);
+    return Response.json({ ok: true, result: { message_id: 102 } });
+  };
+  try {
+    const env = environment();
+    const first = executionContext();
+    await handleRequest(telegramRequest(textUpdate({ update_id: 7200, message: { message_id: 91, chat: { id: 123456 }, text: "Résume Inconnu" } })), env, first);
+    await first.drain();
+    assert.equal(env.DB.rows.get("7200").state, "pending");
+    assert.equal(env.DB.rows.get("7200").fast_path_error_code, "snapshot_absent");
+
+    const base = { label: "Jean — dîner", aliases_json: JSON.stringify(["Jean"]), summary: "Résumé", recommendation: "Reco", actions_json: "{}", sources_json: "[]", updated_at: new Date().toISOString() };
+    env.DB.snapshots.set("old", { prospect_id: "old", ...base, expires_at: "2020-01-01T00:00:00Z" });
+    const second = executionContext();
+    await handleRequest(telegramRequest(textUpdate({ update_id: 7201, message: { message_id: 92, chat: { id: 123456 }, text: "Résume Jean" } })), env, second);
+    await second.drain();
+    assert.equal(env.DB.rows.get("7201").fast_path_error_code, "snapshot_expired");
+
+    env.DB.snapshots.set("fresh-1", { prospect_id: "fresh-1", ...base, expires_at: "2099-01-01T00:00:00Z" });
+    env.DB.snapshots.set("fresh-2", { prospect_id: "fresh-2", ...base, label: "Jean — cocktail", expires_at: "2099-01-01T00:00:00Z" });
+    const third = executionContext();
+    await handleRequest(telegramRequest(textUpdate({ update_id: 7202, message: { message_id: 93, chat: { id: 123456 }, text: "Résume Jean" } })), env, third);
+    await third.drain();
+    assert.equal(env.DB.rows.get("7202").fast_path_error_code, "snapshot_ambiguous");
+    assert.equal(sent.length, 3);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("creates a traceable fast proposal without executing it", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, options) => {
+    sent.push(JSON.parse(options.body).text);
+    return Response.json({ ok: true, result: { message_id: 103 } });
+  };
+  try {
+    const env = environment();
+    env.DB.snapshots.set("p-2", {
+      prospect_id: "p-2", label: "Lina — brunch", aliases_json: JSON.stringify(["Lina"]),
+      summary: "Résumé", recommendation: "Reco",
+      actions_json: JSON.stringify({ prepare_reply: { content: "Brouillon exact", consequence: "Créer un brouillon sans envoi" } }),
+      sources_json: JSON.stringify(["crm:p-2"]), expires_at: "2099-01-01T00:00:00Z", updated_at: new Date().toISOString()
+    });
+    const context = executionContext();
+    const update = textUpdate({ update_id: 7300, message: { message_id: 94, chat: { id: 123456 }, text: "Prépare une réponse Lina" } });
+    await handleRequest(telegramRequest(update), env, context);
+    await context.drain();
+    assert.match(sent[0], /Brouillon exact/);
+    assert.match(sent[0], /CONFIRMER [A-Z0-9]+/);
+    assert.equal(env.DB.actions.size, 1);
+    assert.equal(env.DB.rows.get("7300").state, "completed");
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("completes the stateless MCP initialization handshake", async () => {

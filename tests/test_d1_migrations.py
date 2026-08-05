@@ -34,6 +34,35 @@ class D1MigrationTests(unittest.TestCase):
         ).fetchone()
         self.assertEqual(("ABC123",), row)
 
+    def test_fast_path_schema_tracks_latency_and_expires_snapshots(self):
+        database = sqlite3.connect(":memory:")
+        for migration in (
+            "0002_telegram_commands.sql",
+            "0003_telegram_action_approvals.sql",
+            "0004_telegram_fast_path.sql",
+        ):
+            database.executescript(
+                (ROOT / "worker" / "migrations" / migration).read_text(encoding="utf-8")
+            )
+        columns = {
+            row[1] for row in database.execute("PRAGMA table_info(telegram_commands)")
+        }
+        self.assertTrue(
+            {"fast_path_state", "fast_path_started_at", "fast_path_finished_at", "fast_path_error_code"}
+            <= columns
+        )
+        database.execute(
+            "INSERT INTO telegram_prospect_snapshots "
+            "(prospect_id, label, aliases_json, summary, recommendation, actions_json, sources_json, generated_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime(?, ?))",
+            ("p-1", "Prospect", "[]", "Résumé", "Recommandation", "{}", "[]",
+             "2026-08-05T10:00:00Z", "2026-08-05T10:00:00Z", "+90 minutes"),
+        )
+        expiry = database.execute(
+            "SELECT expires_at FROM telegram_prospect_snapshots WHERE prospect_id = 'p-1'"
+        ).fetchone()[0]
+        self.assertEqual("2026-08-05 11:30:00", expiry)
+
 
 if __name__ == "__main__":
     unittest.main()

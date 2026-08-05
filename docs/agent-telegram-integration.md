@@ -27,4 +27,10 @@ La préparation d’un brouillon ne vaut jamais envoi. Le CA est fourni par l’
 
 ## Latence et reprise
 
-Le cœur ne réalise aucun polling et peut être invoqué dès qu’une commande est disponible. L’adaptateur d’exécution interactive doit viser moins de deux minutes entre la réception du webhook et la réponse Telegram. Le passage ChatGPT Work horaire continue de lister les commandes non terminées et constitue la reprise de secours. La migration D1 `0003_telegram_action_approvals.sql` et le Worker doivent être déployés avant un essai réel.
+Le cœur ne réalise aucun polling. Le Worker accuse réception du webhook puis utilise `waitUntil` pour traiter les commandes couvertes. Après transcription, un vocal suit la même voie qu’un texte.
+
+Le passage ChatGPT Work rafraîchit avec `belloria_refresh_fast_snapshots` au plus 100 instantanés minimaux, valables de 5 à 120 minutes à partir de leur date de génération. Chaque instantané contient uniquement identifiant, libellé, alias de résolution, résumé, recommandation, actions déjà validées et références de sources. Il ne contient ni corps d’email ni transcription de conversation client. Le remplacement D1 est atomique.
+
+La voie rapide couvre résumé, recommandation, préparation de réponse, préparation de devis et relance. Une consultation réussie efface la commande ; une action crée seulement la proposition traçable de BELL-030 et exige toujours `CONFIRMER <jeton>`. Si le contexte est absent, ambigu, périmé ou incomplet, le bot le signale sans terminer la commande : le passage horaire reste la reprise de secours.
+
+Les colonnes `fast_path_started_at` et `fast_path_finished_at` mesurent la latence technique. Aucun KPI commercial n’est calculé et aucune Queue n’est nécessaire tant que le traitement reste sous 30 secondes. La migration D1 `0004_telegram_fast_path.sql` et le Worker doivent être déployés avant un essai réel.

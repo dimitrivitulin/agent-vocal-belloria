@@ -1,6 +1,8 @@
 const TELEGRAM_VOICE_MAX_BYTES = 5 * 1024 * 1024;
 const TELEGRAM_TEXT_MAX_CHARS = 4096;
 const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo";
+const FAST_SNAPSHOT_MAX_AGE_MINUTES = 120;
+const FAST_SNAPSHOT_LIMIT = 100;
 
 const TOOLS = [
   {
@@ -28,6 +30,54 @@ const TOOLS = [
       },
       required: ["command_id", "confirmed"],
       additionalProperties: false
+    }
+  },
+  {
+    name: "belloria_refresh_fast_snapshots",
+    description: "Replace temporary minimal prospect snapshots used by the Telegram fast path. Never include email bodies or conversation transcripts.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        expires_in_minutes: { type: "integer", minimum: 5, maximum: FAST_SNAPSHOT_MAX_AGE_MINUTES, default: 90 },
+        snapshots: {
+          type: "array", maxItems: FAST_SNAPSHOT_LIMIT,
+          items: {
+            type: "object",
+            properties: {
+              prospect_id: { type: "string", minLength: 1, maxLength: 100 },
+              label: { type: "string", minLength: 1, maxLength: 200 },
+              aliases: { type: "array", maxItems: 10, items: { type: "string", minLength: 2, maxLength: 200 } },
+              summary: { type: "string", minLength: 1, maxLength: 1500 },
+              recommendation: { type: "string", minLength: 1, maxLength: 1500 },
+              actions: {
+                type: "object",
+                properties: {
+                  prepare_reply: { $ref: "#/$defs/action" },
+                  prepare_quote: { $ref: "#/$defs/action" },
+                  follow_up: { $ref: "#/$defs/action" }
+                },
+                additionalProperties: false
+              },
+              sources: { type: "array", maxItems: 20, items: { type: "string", minLength: 1, maxLength: 300 } },
+              generated_at: { type: "string", format: "date-time" }
+            },
+            required: ["prospect_id", "label", "aliases", "summary", "recommendation", "actions", "sources", "generated_at"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["snapshots"],
+      additionalProperties: false,
+      $defs: {
+        action: {
+          type: "object",
+          properties: {
+            content: { type: "string", minLength: 1, maxLength: TELEGRAM_TEXT_MAX_CHARS },
+            consequence: { type: "string", minLength: 1, maxLength: 1000 }
+          },
+          required: ["content", "consequence"], additionalProperties: false
+        }
+      }
     }
   },
   {
@@ -190,12 +240,119 @@ async function transcribeVoice(env, command) {
     await env.DB.prepare(
       "UPDATE telegram_commands SET content = ?, voice_file_id = NULL, state = 'pending', updated_at = CURRENT_TIMESTAMP, last_error_code = NULL WHERE command_id = ? AND state = 'transcribing'"
     ).bind(text, command.id).run();
+    await processFastCommand(env, { ...command, content: text });
   } catch (error) {
     const code = cleanErrorCode(error, "voice_transcription_failed");
     await env.DB.prepare(
       "UPDATE telegram_commands SET voice_file_id = NULL, state = 'quarantined', updated_at = CURRENT_TIMESTAMP, last_error_code = ? WHERE command_id = ? AND state = 'transcribing'"
     ).bind(code, command.id).run();
     console.log(JSON.stringify({ event: "telegram_voice_quarantined", code }));
+  }
+}
+
+function normalize(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9@]+/g, " ").trim();
+}
+
+function parseFastCommand(text) {
+  const value = normalize(text);
+  if (value.startsWith("confirmer ")) return null;
+  const patterns = [
+    ["prepare_quote", ["prepare le devis"]],
+    ["prepare_reply", ["prepare une reponse"]],
+    ["follow_up", ["relance"]],
+    ["summary", ["resume"]],
+    ["recommendation", ["que lui proposer", "recommande", "proposer"]]
+  ];
+  for (const [intent, markers] of patterns) {
+    for (const marker of markers) {
+      const index = value.indexOf(marker);
+      if (index >= 0) return { intent, query: value.slice(index + marker.length).trim() };
+    }
+  }
+  return null;
+}
+
+function safeJson(value, fallback) {
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+async function setFastState(env, commandId, state, code = null, completed = false) {
+  await env.DB.prepare(
+    `UPDATE telegram_commands SET fast_path_state = ?, fast_path_finished_at = CURRENT_TIMESTAMP, fast_path_error_code = ?, updated_at = CURRENT_TIMESTAMP${completed ? ", state = 'completed', content = NULL" : ""} WHERE command_id = ? AND state = 'pending'`
+  ).bind(state, code, commandId).run();
+}
+
+async function fastRefusal(env, commandId, code, text) {
+  await sendText(env, text);
+  await setFastState(env, commandId, "deferred", code, false);
+}
+
+function fastToken() {
+  const bytes = new Uint8Array(9);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(36).padStart(2, "0")).join("").toUpperCase();
+}
+
+async function processFastCommand(env, command) {
+  const parsed = parseFastCommand(command.content);
+  if (!parsed) return;
+  try {
+    const claimed = await env.DB.prepare(
+      "UPDATE telegram_commands SET fast_path_state = 'processing', fast_path_started_at = CURRENT_TIMESTAMP, fast_path_error_code = NULL WHERE command_id = ? AND state = 'pending' AND fast_path_state IS NULL"
+    ).bind(command.id).run();
+    if (Number(claimed.meta?.changes || 0) !== 1) return;
+    if (!parsed.query) {
+      await fastRefusal(env, command.id, "prospect_missing", "Voie rapide : précisez le prospect. La demande reste disponible pour le passage de reprise.");
+      return;
+    }
+    const result = await env.DB.prepare(
+      "SELECT prospect_id, label, aliases_json, summary, recommendation, actions_json, sources_json, expires_at FROM telegram_prospect_snapshots ORDER BY updated_at DESC LIMIT ?"
+    ).bind(FAST_SNAPSHOT_LIMIT).all();
+    const now = Date.now();
+    const candidates = (result.results || []).filter((row) => {
+      const terms = [row.label, ...safeJson(row.aliases_json, [])].map(normalize);
+      return terms.some((term) => term && (term.includes(parsed.query) || parsed.query.includes(term)));
+    });
+    const fresh = candidates.filter((row) => Date.parse(row.expires_at) > now);
+    if (!candidates.length) {
+      await fastRefusal(env, command.id, "snapshot_absent", "Voie rapide indisponible : aucun contexte temporaire ne correspond. La demande reste disponible pour le passage de reprise.");
+      return;
+    }
+    if (!fresh.length) {
+      await fastRefusal(env, command.id, "snapshot_expired", "Voie rapide indisponible : le contexte temporaire est périmé. La demande reste disponible pour le passage de reprise.");
+      return;
+    }
+    if (fresh.length !== 1) {
+      await fastRefusal(env, command.id, "snapshot_ambiguous", "Voie rapide indisponible : plusieurs prospects correspondent. Précisez le prospect ; la demande reste disponible pour la reprise.");
+      return;
+    }
+    const snapshot = fresh[0];
+    let reply;
+    if (parsed.intent === "summary") reply = snapshot.summary;
+    else if (parsed.intent === "recommendation") reply = snapshot.recommendation;
+    else {
+      const action = safeJson(snapshot.actions_json, {})[parsed.intent];
+      if (!action?.content || !action?.consequence) {
+        await fastRefusal(env, command.id, "action_unavailable", "Voie rapide indisponible : cette action n’est pas validée dans l’instantané. La demande reste disponible pour la reprise.");
+        return;
+      }
+      const token = fastToken();
+      const proposal = await proposeAction(env, {
+        command_id: command.id, token, prospect: snapshot.label,
+        sources: safeJson(snapshot.sources_json, []), content: action.content,
+        consequence: action.consequence, expires_in_minutes: 10
+      });
+      if (!proposal.proposed) throw Object.assign(new Error("proposal rejected"), { code: "proposal_rejected" });
+      reply = `Action proposée pour ${snapshot.label}\nContenu exact : ${action.content}\nConséquence : ${action.consequence}\nPour approuver : CONFIRMER ${token}`;
+    }
+    await sendText(env, reply);
+    await setFastState(env, command.id, "replied", null, true);
+    console.log(JSON.stringify({ event: "telegram_fast_path_replied", command_id: command.id }));
+  } catch (error) {
+    const code = cleanErrorCode(error, "fast_path_failed");
+    await setFastState(env, command.id, "failed", code, false);
+    console.log(JSON.stringify({ event: "telegram_fast_path_failed", code }));
   }
 }
 
@@ -214,8 +371,8 @@ async function telegramWebhook(request, env, context) {
   }
 
   const inserted = await storeTelegramCommand(env.DB, command);
-  if (inserted && command.kind === "voice") {
-    const work = transcribeVoice(env, command);
+  if (inserted) {
+    const work = command.kind === "voice" ? transcribeVoice(env, command) : processFastCommand(env, command);
     if (context?.waitUntil) context.waitUntil(work);
     else await work;
   }
@@ -274,6 +431,32 @@ async function proposeAction(env, args) {
   return { proposed: Number(result.meta?.changes || 0) === 1, token, expires_in_minutes: minutes };
 }
 
+function validateSnapshot(snapshot) {
+  const text = (value, maximum) => typeof value === "string" && value.trim() && value.length <= maximum;
+  if (!snapshot || !text(snapshot.prospect_id, 100) || !text(snapshot.label, 200) || !text(snapshot.summary, 1500) || !text(snapshot.recommendation, 1500)) return false;
+  if (!Array.isArray(snapshot.aliases) || snapshot.aliases.length > 10 || snapshot.aliases.some((item) => !text(item, 200))) return false;
+  if (!Array.isArray(snapshot.sources) || snapshot.sources.length > 20 || snapshot.sources.some((item) => !text(item, 300))) return false;
+  if (!snapshot.actions || typeof snapshot.actions !== "object" || Array.isArray(snapshot.actions)) return false;
+  if (Object.keys(snapshot.actions).some((key) => !["prepare_reply", "prepare_quote", "follow_up"].includes(key))) return false;
+  if (Object.values(snapshot.actions).some((action) => !action || !text(action.content, TELEGRAM_TEXT_MAX_CHARS) || !text(action.consequence, 1000))) return false;
+  return Number.isFinite(Date.parse(snapshot.generated_at));
+}
+
+async function refreshFastSnapshots(env, args) {
+  const minutes = args.expires_in_minutes === undefined ? 90 : args.expires_in_minutes;
+  if (!Number.isInteger(minutes) || minutes < 5 || minutes > FAST_SNAPSHOT_MAX_AGE_MINUTES) throw new Error("expires_in_minutes must be an integer from 5 to 120");
+  if (!Array.isArray(args.snapshots) || args.snapshots.length > FAST_SNAPSHOT_LIMIT || args.snapshots.some((item) => !validateSnapshot(item))) throw new Error("snapshots contain invalid or excessive data");
+  const statements = [env.DB.prepare("DELETE FROM telegram_prospect_snapshots").bind()];
+  for (const snapshot of args.snapshots) {
+    statements.push(env.DB.prepare(
+      "INSERT INTO telegram_prospect_snapshots (prospect_id, label, aliases_json, summary, recommendation, actions_json, sources_json, generated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime(?, ?))"
+    ).bind(snapshot.prospect_id, snapshot.label, JSON.stringify(snapshot.aliases), snapshot.summary, snapshot.recommendation,
+      JSON.stringify(snapshot.actions), JSON.stringify(snapshot.sources), snapshot.generated_at, snapshot.generated_at, `+${minutes} minutes`));
+  }
+  await env.DB.batch(statements);
+  return { refreshed: args.snapshots.length, expires_in_minutes: minutes };
+}
+
 async function consumeApprovedAction(env, confirmationCommandId) {
   if (!/^[0-9]{1,20}$/.test(confirmationCommandId)) throw new Error("confirmation_command_id must contain 1 to 20 digits");
   const result = await env.DB.prepare(
@@ -308,7 +491,7 @@ async function mcp(request, env) {
   let message;
   try { message = await request.json(); } catch { return json({ error: "invalid request" }, 400); }
   const id = message.id;
-  if (message.method === "initialize") return rpcResult(id, { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "belloria-mcp", version: "0.3.0" } });
+  if (message.method === "initialize") return rpcResult(id, { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "belloria-mcp", version: "0.4.0" } });
   if (message.method === "notifications/initialized" || message.method === "notifications/cancelled") return new Response(null, { status: 202 });
   if (message.method === "ping") return rpcResult(id, {});
   if (message.method === "tools/list") return rpcResult(id, { tools: TOOLS });
@@ -326,6 +509,8 @@ async function mcp(request, env) {
       const limit = args.limit === undefined ? 10 : args.limit;
       if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error("limit must be an integer from 1 to 20");
       value = { commands: await listCommands(env, limit) };
+    } else if (name === "belloria_refresh_fast_snapshots") {
+      value = await refreshFastSnapshots(env, args);
     } else if (name === "belloria_complete_command") {
       if (args.confirmed !== true) throw new Error("explicit confirmation is required");
       value = await completeCommand(env, args.command_id || "");
@@ -347,6 +532,18 @@ export async function handleRequest(request, env, context) {
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
   return json({ error: "not found" }, 404);
+}
+
+export function createWorkerEntrypoint(oauthProvider) {
+  return {
+    fetch(request, env, context) {
+      const path = new URL(request.url).pathname;
+      if (path === "/health" || path === "/webhooks/telegram") {
+        return handleRequest(request, env, context);
+      }
+      return oauthProvider.fetch(request, env, context);
+    }
+  };
 }
 
 function toHex(buffer) {

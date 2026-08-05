@@ -27,10 +27,11 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Terminé lorsque** une conversation Telegram peut charger le bon contexte, proposer une action, obtenir la confirmation et exécuter uniquement l'action approuvée avec un compte rendu traçable.
   Cœur conversationnel, approbations D1, déploiement, aller-retour Telegram réel et six outils MCP validés. Le déclenchement interactif et la cible de latence sont isolés dans BELL-033 pour ne pas mêler contrat conversationnel et transport temps réel.
 
-- [ ] **BELL-033 — Voie rapide Telegram sous deux minutes** (`pending`)
+- [x] **BELL-033 — Voie rapide Telegram sous deux minutes** (`completed`)
   Répondre immédiatement au webhook, puis traiter les commandes couvertes depuis un instantané prospect minimal et temporaire dans D1. Utiliser `waitUntil` tant que le traitement reste sous 30 secondes, conserver le passage horaire comme reprise et n’ajouter une Queue qu’après mesure démontrant sa nécessité.
   **Terminé lorsque** une commande texte ou vocale représentative reçoit automatiquement une consultation ou une proposition traçable en moins de deux minutes, sans polling manuel, avec refus sûr si le contexte est absent, ambigu ou périmé.
   **Frontières** : BELL-030 reste propriétaire des intentions et confirmations ; BELL-031 des règles anti-perte et priorités métier ; BELL-032 des KPI commerciaux. BELL-033 mesure seulement les latences techniques et ne conserve ni corps d’email ni conversation client durable dans D1.
+  Instantanés D1 temporaires, traitement `waitUntil`, tests texte/vocal et garde-fous déployés. L’aller-retour Telegram synthétique a répondu dans la même seconde après un webhook accusé en 191 ms ; les données de test ont été nettoyées.
 
 - [ ] **BELL-031 — Boucle anti-perte et suivi automatique** (`pending`)
   Détecter demandes sans réponse, relances échues, devis silencieux, acomptes attendus, événements proches ou passés et collisions avec une prestation confirmée. Générer le briefing Telegram et mettre à jour le CRM de façon idempotente.

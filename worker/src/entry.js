@@ -1,8 +1,8 @@
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 
-import { oauthApiHandler, oauthDefaultHandler } from "./index.js";
+import { createWorkerEntrypoint, oauthApiHandler, oauthDefaultHandler } from "./index.js";
 
-export default new OAuthProvider({
+const oauthProvider = new OAuthProvider({
   apiRoute: "/mcp",
   apiHandler: oauthApiHandler,
   defaultHandler: oauthDefaultHandler,
@@ -20,3 +20,5 @@ export default new OAuthProvider({
     resource_name: "Belloria"
   }
 });
+
+export default createWorkerEntrypoint(oauthProvider);
