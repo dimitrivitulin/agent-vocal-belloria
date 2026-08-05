@@ -56,9 +56,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
-- [ ] **BELL-034 — Réception directe des formulaires Tally** (`ready_for_review`)
+- [x] **BELL-034 — Réception directe des formulaires Tally** (`completed`)
   Recevoir le JSON signé de Tally dans le Worker, le dédupliquer dans D1 et l'exposer au passage ChatGPT Work par MCP. Gmail reste la source des emails directs et de Mariages.net, mais n'est plus la voie d'entrée des formulaires Tally.
   **Terminé lorsque** la migration et le Worker sont déployés, le webhook Tally réel est connecté et une soumission contrôlée traverse la file jusqu'au CRM sans notification Gmail.
+  Route signée déployée, migration D1 appliquée et soumission réelle `DqAg2Yl` reçue en attente sans Gmail.
 
 - [x] **BELL-016 — Bot Telegram privé sur Cloudflare** (`completed`)
   Transport privé, commandes texte/vocales, D1, MCP et transcription déployés puis validés par l’aller-retour réel de BELL-030.

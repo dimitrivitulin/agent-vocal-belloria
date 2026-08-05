@@ -1,6 +1,6 @@
 # BELL-034 — Réception directe des formulaires Tally
 
-Statut: ready_for_review
+Statut: completed
 Branche: `codex/bell-034-webhook-tally`
 Dernière mise à jour: 2026-08-06
 
@@ -28,7 +28,8 @@ Recevoir les soumissions Tally directement dans Cloudflare, sans utiliser leur n
 - Migration D1 `0005_tally_submissions.sql` ajoutée.
 - Migration appliquée et Worker `fef1d6f7-8035-4520-b462-5b44ed2f085b` déployé.
 - Test signé de production accepté puis donnée synthétique supprimée ; aucun service client contacté.
+- Soumission Tally réelle `DqAg2Yl` reçue directement et conservée en état `pending` sans passage par Gmail.
 
 ## Prochaine action
 
-Connecter l'URL et le signing secret dans Tally, effectuer une soumission contrôlée, puis adapter la tâche ChatGPT Work.
+Préparer BELL-035 pour utiliser le connecteur Tally dans ChatGPT Work sans retirer le webhook anti-perte.

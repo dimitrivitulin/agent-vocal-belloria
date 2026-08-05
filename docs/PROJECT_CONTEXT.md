@@ -20,7 +20,8 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 
 ## Architecture retenue à ce stade
 
-- Gmail applique des filtres et labels aux messages candidats.
+- Tally envoie directement chaque nouveau formulaire au Worker Cloudflare par webhook signé ; D1 conserve la file anti-perte jusqu'au succès CRM.
+- Gmail applique des filtres et labels aux autres messages candidats.
 - Une tâche ChatGPT Work cloud consulte périodiquement les éléments à traiter.
 - Notion constitue la source de vérité du CRM métier.
 - Le canal mobile actif est un bot Telegram privé sur Cloudflare Workers, limité à un seul identifiant de chat Belloria.
@@ -36,9 +37,9 @@ Cette architecture reste susceptible d'évoluer après validation du prototype. 
 
 ## Flux principal envisagé
 
-1. Gmail reçoit un email et applique un label de qualification initiale.
-2. ChatGPT Work récupère les nouveaux candidats lors de son prochain passage.
-3. Les messages Tally sont parsés sans IA ; les emails libres sont qualifiés si nécessaire.
+1. Tally transmet les formulaires structurés au Worker ; Gmail qualifie séparément les emails directs et Mariages.net.
+2. ChatGPT Work récupère les nouvelles soumissions et les candidats Gmail lors de son prochain passage.
+3. Les formulaires Tally sont lus sans IA ; les emails libres sont qualifiés si nécessaire.
 4. Le système recherche un doublon par email, téléphone, date et type d'événement.
 5. Le CRM Notion est créé ou actualisé.
 6. Un compte rendu est envoyé sur le chat Telegram privé par le MCP Belloria.
