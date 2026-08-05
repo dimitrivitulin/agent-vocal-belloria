@@ -1,35 +1,34 @@
-# BELL-034 — Réception directe des formulaires Tally
+# BELL-035 — Intégration du plugin Tally dans ChatGPT Work
 
-Statut: completed
-Branche: `codex/bell-034-webhook-tally`
+Statut: pending
+Branche: `codex/bell-035-tally-plugin-work`
 Dernière mise à jour: 2026-08-06
 
 ## Objectif
 
-Recevoir les soumissions Tally directement dans Cloudflare, sans utiliser leur notification Gmail comme entrée de traitement.
+Utiliser le connecteur Tally pour lire plus simplement une soumission dans ChatGPT Work, tout en conservant le webhook Cloudflare et D1 comme file anti-perte et autorité d'idempotence.
 
-## Périmètre
+## Périmètre prévu
 
-- Vérifier la signature du webhook et limiter l'entrée au formulaire configuré.
-- Dédupliquer et conserver temporairement les soumissions dans D1.
-- Exposer la file Tally au passage ChatGPT Work via le MCP, puis effacer le payload après succès CRM.
-- Conserver Gmail pour les emails directs et Mariages.net, sans traiter les notifications Tally.
+- Inventorier les outils réellement exposés par le connecteur Tally installé dans ChatGPT Work.
+- Faire retourner par la liste D1 uniquement les métadonnées techniques, sans payload personnel par défaut.
+- Ajouter une lecture ciblée du payload D1 réservée au repli si Tally est indisponible.
+- Adapter la tâche Work : D1 détecte, Tally lit, Notion synchronise, D1 acquitte après succès.
+- Exclure les notifications Tally de la recherche Gmail sans désactiver leur éventuelle réception humaine.
+- Interdire à la tâche toute création ou modification de formulaire Tally.
 
 ## Critères de réussite
 
-- Une livraison répétée du même événement ne crée pas de doublon.
-- Une signature invalide ou un autre formulaire est refusé.
-- Le passage planifié peut lister puis terminer explicitement chaque soumission.
-- Tests Worker, `git diff --check` et examen du diff réussissent.
+- Une soumission contrôlée est retrouvée par son `submission_id` via Tally et concorde avec l'événement D1.
+- Le CRM n'est muté qu'une fois et l'acquittement D1 intervient après succès Notion.
+- Une indisponibilité ou une évolution du connecteur Tally déclenche le repli D1 sans perte ni doublon.
+- La tâche ne peut ni créer, ni éditer un formulaire et ne charge pas en masse les réponses historiques.
+- Tests Worker, passage Work contrôlé, `git diff --check` et examen du diff réussissent.
 
-## Validation
+## Décision préparée
 
-- 21 tests Worker et 77 tests Python réussis ; signature, filtrage de formulaire, rejeu et effacement après traitement sont couverts.
-- Migration D1 `0005_tally_submissions.sql` ajoutée.
-- Migration appliquée et Worker `fef1d6f7-8035-4520-b462-5b44ed2f085b` déployé.
-- Test signé de production accepté puis donnée synthétique supprimée ; aucun service client contacté.
-- Soumission Tally réelle `DqAg2Yl` reçue directement et conservée en état `pending` sans passage par Gmail.
+Le plugin Tally simplifie la lecture mais ne remplace ni le webhook temps réel ni D1. Le serveur MCP Tally est encore annoncé en bêta ; la file locale reste donc nécessaire.
 
 ## Prochaine action
 
-Préparer BELL-035 pour utiliser le connecteur Tally dans ChatGPT Work sans retirer le webhook anti-perte.
+Au démarrage du lot, relever les noms et schémas exacts des outils Tally visibles dans ChatGPT Work, puis implémenter le contrat minimal décrit dans `docs/tally-plugin-work.md`.
