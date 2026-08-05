@@ -8,7 +8,7 @@ Les labels et filtres Gmail Belloria sont actifs et le passage contrôlé est va
 
 ## Application MCP Belloria
 
-Créer l'application personnalisée avec l'URL `https://belloria-assistant.belloria-dvitulin.workers.dev/mcp` et le mode `OAuth`. Le Worker gère la découverte, PKCE et l'enregistrement dynamique ; la page Belloria demande le secret propriétaire sans le transmettre à ChatGPT. Vérifier la présence exacte des outils `belloria_channel_status`, `belloria_list_commands`, `belloria_complete_command` et `belloria_send_text`.
+Créer l'application personnalisée avec l'URL `https://belloria-assistant.belloria-dvitulin.workers.dev/mcp` et le mode `OAuth`. Le Worker gère la découverte, PKCE et l'enregistrement dynamique ; la page Belloria demande le secret propriétaire sans le transmettre à ChatGPT. Vérifier la présence exacte des outils `belloria_channel_status`, `belloria_list_commands`, `belloria_complete_command`, `belloria_propose_action`, `belloria_consume_approved_action` et `belloria_send_text`.
 
 ## Commandes Telegram
 
@@ -17,6 +17,8 @@ Le contrat conversationnel et la confirmation à usage unique sont décrits dans
 Au début de chaque passage, appeler `belloria_list_commands` avec une limite de 10. Pour `status=pending`, le champ `text` contient soit le message saisi, soit la transcription du vocal. Pour `status=quarantined`, ne rien exécuter : signaler seulement le code d'erreur assaini. Une commande de consultation peut être exécutée dans le périmètre Gmail/Notion déjà autorisé. Une mutation, un envoi d'email ou une action irréversible exige toujours une confirmation explicite portant sur son contenu exact.
 
 Après traitement réussi ou décision explicite de ne pas agir, appeler `belloria_complete_command` avec l'identifiant reçu et `confirmed: true` ; le Worker efface alors le texte conservé dans D1. En cas d'erreur technique, laisser la commande en attente pour la reprise suivante.
+
+Pour une mutation, enregistrer d’abord la proposition avec `belloria_propose_action`, envoyer son texte exact et demander `CONFIRMER <jeton>`. Lorsqu’une nouvelle commande Telegram contient cette confirmation, appeler `belloria_consume_approved_action` avec son identifiant et `confirmed: true`. Exécuter uniquement l’action exacte retournée lorsque `approved=true`; sinon ne rien muter et ne pas effacer la commande de confirmation.
 
 ## Instruction de la tâche
 

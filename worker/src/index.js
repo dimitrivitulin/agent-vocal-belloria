@@ -31,6 +31,37 @@ const TOOLS = [
     }
   },
   {
+    name: "belloria_propose_action",
+    description: "Persist the exact action proposed to Belloria until a matching Telegram confirmation is received.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        command_id: { type: "string", pattern: "^[0-9]{1,20}$" },
+        token: { type: "string", pattern: "^[A-Z0-9_-]{6,64}$" },
+        prospect: { type: "string", minLength: 1, maxLength: 300 },
+        sources: { type: "array", items: { type: "string", minLength: 1, maxLength: 300 }, maxItems: 20 },
+        content: { type: "string", minLength: 1, maxLength: TELEGRAM_TEXT_MAX_CHARS },
+        consequence: { type: "string", minLength: 1, maxLength: 1000 },
+        expires_in_minutes: { type: "integer", minimum: 1, maximum: 15, default: 10 }
+      },
+      required: ["command_id", "token", "prospect", "sources", "content", "consequence"],
+      additionalProperties: false
+    }
+  },
+  {
+    name: "belloria_consume_approved_action",
+    description: "Atomically consume an action only when a pending Telegram command contains its exact confirmation token.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        confirmation_command_id: { type: "string", pattern: "^[0-9]{1,20}$" },
+        confirmed: { type: "boolean", const: true }
+      },
+      required: ["confirmation_command_id", "confirmed"],
+      additionalProperties: false
+    }
+  },
+  {
     name: "belloria_send_text",
     description: "Send one text to the fixed private Belloria Telegram chat after explicit approval.",
     inputSchema: {
@@ -217,6 +248,55 @@ async function completeCommand(env, commandId) {
   return { completed: Number(result.meta?.changes || 0) === 1 };
 }
 
+function requiredText(value, name, maximum) {
+  if (typeof value !== "string" || !value.trim() || value.length > maximum) {
+    throw new Error(`${name} must contain 1 to ${maximum} characters`);
+  }
+  return value.trim();
+}
+
+async function proposeAction(env, args) {
+  const commandId = String(args.command_id || "");
+  const token = String(args.token || "").toUpperCase();
+  const minutes = args.expires_in_minutes === undefined ? 10 : args.expires_in_minutes;
+  if (!/^[0-9]{1,20}$/.test(commandId)) throw new Error("command_id must contain 1 to 20 digits");
+  if (!/^[A-Z0-9_-]{6,64}$/.test(token)) throw new Error("token must contain 6 to 64 safe characters");
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 15) throw new Error("expires_in_minutes must be an integer from 1 to 15");
+  if (!Array.isArray(args.sources) || args.sources.length > 20 || args.sources.some((item) => typeof item !== "string" || !item.trim() || item.length > 300)) {
+    throw new Error("sources must contain at most 20 non-empty strings");
+  }
+  const prospect = requiredText(args.prospect, "prospect", 300);
+  const content = requiredText(args.content, "content", TELEGRAM_TEXT_MAX_CHARS);
+  const consequence = requiredText(args.consequence, "consequence", 1000);
+  const result = await env.DB.prepare(
+    "INSERT INTO telegram_action_approvals (token, source_command_id, prospect, sources_json, content, consequence, expires_at) SELECT ?, command_id, ?, ?, ?, ?, datetime('now', ?) FROM telegram_commands WHERE command_id = ? AND state = 'pending' ON CONFLICT(token) DO NOTHING"
+  ).bind(token, prospect, JSON.stringify(args.sources), content, consequence, `+${minutes} minutes`, commandId).run();
+  return { proposed: Number(result.meta?.changes || 0) === 1, token, expires_in_minutes: minutes };
+}
+
+async function consumeApprovedAction(env, confirmationCommandId) {
+  if (!/^[0-9]{1,20}$/.test(confirmationCommandId)) throw new Error("confirmation_command_id must contain 1 to 20 digits");
+  const result = await env.DB.prepare(
+    "UPDATE telegram_action_approvals SET state = 'consumed', consumed_at = CURRENT_TIMESTAMP, confirmation_command_id = ? WHERE token = (SELECT upper(trim(substr(content, 10))) FROM telegram_commands WHERE command_id = ? AND state = 'pending' AND upper(content) LIKE 'CONFIRMER %') AND state = 'pending' AND expires_at > CURRENT_TIMESTAMP RETURNING token, source_command_id, prospect, sources_json, content, consequence"
+  ).bind(confirmationCommandId, confirmationCommandId).all();
+  const row = result.results?.[0];
+  if (!row) return { approved: false };
+  await env.DB.prepare(
+    "UPDATE telegram_commands SET state = 'completed', content = NULL, updated_at = CURRENT_TIMESTAMP WHERE command_id = ? AND state = 'pending'"
+  ).bind(confirmationCommandId).run();
+  return {
+    approved: true,
+    action: {
+      token: row.token,
+      source_command_id: row.source_command_id,
+      prospect: row.prospect,
+      sources: JSON.parse(row.sources_json),
+      content: row.content,
+      consequence: row.consequence
+    }
+  };
+}
+
 async function sendText(env, text) {
   if (!env.TELEGRAM_ALLOWED_CHAT_ID) throw new Error("Telegram chat is not configured");
   if (!text || text.length > TELEGRAM_TEXT_MAX_CHARS) throw new Error(`text must contain 1 to ${TELEGRAM_TEXT_MAX_CHARS} characters`);
@@ -249,6 +329,11 @@ async function mcp(request, env) {
     } else if (name === "belloria_complete_command") {
       if (args.confirmed !== true) throw new Error("explicit confirmation is required");
       value = await completeCommand(env, args.command_id || "");
+    } else if (name === "belloria_propose_action") {
+      value = await proposeAction(env, args);
+    } else if (name === "belloria_consume_approved_action") {
+      if (args.confirmed !== true) throw new Error("explicit confirmation is required");
+      value = await consumeApprovedAction(env, args.confirmation_command_id || "");
     } else if (name === "belloria_send_text") {
       if (args.confirmed !== true) throw new Error("explicit confirmation is required");
       value = await sendText(env, args.text || "");

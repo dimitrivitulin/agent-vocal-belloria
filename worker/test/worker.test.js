@@ -6,7 +6,7 @@ import { extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHan
 globalThis.crypto ||= webcrypto;
 
 class FakeDb {
-  constructor() { this.rows = new Map(); }
+  constructor() { this.rows = new Map(); this.actions = new Map(); }
 
   prepare(sql) {
     const db = this;
@@ -26,6 +26,19 @@ class FakeDb {
       const [command_id, message_id, command_kind, content, voice_file_id, state] = args;
       if (this.rows.has(command_id)) return { meta: { changes: 0 } };
       this.rows.set(command_id, { command_id, message_id, command_kind, content, voice_file_id, state, created_at: "2026-08-03T10:00:00Z", last_error_code: null });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("INSERT INTO telegram_action_approvals")) {
+      const [token, prospect, sources_json, content, consequence, modifier, source_command_id] = args;
+      if (this.actions.has(token)) return { meta: { changes: 0 } };
+      if (this.rows.get(source_command_id)?.state !== "pending") return { meta: { changes: 0 } };
+      const minutes = Number(String(modifier).match(/\d+/)?.[0] || 10);
+      this.actions.set(token, {
+        token, source_command_id, prospect, sources_json, content, consequence,
+        state: "pending", expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
+        consumed_at: null, confirmation_command_id: null
+      });
       return { meta: { changes: 1 } };
     }
 
@@ -57,10 +70,22 @@ class FakeDb {
   }
 
   all(sql, args) {
-    if (!sql.startsWith("SELECT command_id")) throw new Error(`Unsupported fake SQL: ${sql}`);
-    const limit = args[0];
-    const results = [...this.rows.values()].filter((row) => ["pending", "quarantined"].includes(row.state)).slice(0, limit);
-    return { results };
+    if (sql.startsWith("SELECT command_id")) {
+      const limit = args[0];
+      const results = [...this.rows.values()].filter((row) => ["pending", "quarantined"].includes(row.state)).slice(0, limit);
+      return { results };
+    }
+    if (sql.startsWith("UPDATE telegram_action_approvals")) {
+      const [confirmationCommandId] = args;
+      const command = this.rows.get(confirmationCommandId);
+      const token = command?.state === "pending" && /^CONFIRMER\s+/i.test(command.content || "")
+        ? command.content.replace(/^CONFIRMER\s+/i, "").trim().toUpperCase() : "";
+      const action = this.actions.get(token);
+      if (!action || action.state !== "pending" || new Date(action.expires_at) <= new Date()) return { results: [] };
+      Object.assign(action, { state: "consumed", consumed_at: new Date().toISOString(), confirmation_command_id: confirmationCommandId });
+      return { results: [{ ...action }] };
+    }
+    throw new Error(`Unsupported fake SQL: ${sql}`);
   }
 }
 
@@ -186,7 +211,8 @@ test("exposes provider-neutral Belloria tools after OAuth validation", async () 
   assert.equal((await handleRequest(mcpRequest(list), env)).status, 404);
   const response = await (await callMcp(list, env)).json();
   assert.deepEqual(response.result.tools.map((tool) => tool.name), [
-    "belloria_channel_status", "belloria_list_commands", "belloria_complete_command", "belloria_send_text"
+    "belloria_channel_status", "belloria_list_commands", "belloria_complete_command",
+    "belloria_propose_action", "belloria_consume_approved_action", "belloria_send_text"
   ]);
   assert.equal(JSON.stringify(response).includes("123456"), false);
 
@@ -242,6 +268,54 @@ test("sends only to the fixed chat and requires exact confirmation", async () =>
     assert.equal(payloads[0].body.text, "Rapport");
     assert.equal(payloads[0].url.includes("telegram-test-token"), true);
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test("persists and atomically consumes only an exact Telegram approval", async () => {
+  const env = environment();
+  await handleRequest(telegramRequest(textUpdate()), env);
+  const proposal = await (await callMcp(toolCall(20, "belloria_propose_action", {
+    command_id: "7001", token: "ABC123", prospect: "Élodie — mariage",
+    sources: ["crm:p-1", "gmail:m-1"], content: "Créer le brouillon exact",
+    consequence: "Créer un brouillon sans envoi", expires_in_minutes: 10
+  }), env)).json();
+  assert.deepEqual(JSON.parse(proposal.result.content[0].text), { proposed: true, token: "ABC123", expires_in_minutes: 10 });
+
+  const wrongUpdate = textUpdate({ update_id: 7003, message: { message_id: 83, chat: { id: 123456 }, text: "CONFIRMER AUTRE1" } });
+  await handleRequest(telegramRequest(wrongUpdate), env);
+  const wrong = await (await callMcp(toolCall(21, "belloria_consume_approved_action", { confirmation_command_id: "7003", confirmed: true }), env)).json();
+  assert.deepEqual(JSON.parse(wrong.result.content[0].text), { approved: false });
+  assert.equal(env.DB.rows.get("7003").content, "CONFIRMER AUTRE1");
+
+  const confirmUpdate = textUpdate({ update_id: 7004, message: { message_id: 84, chat: { id: 123456 }, text: "CONFIRMER abc123" } });
+  await handleRequest(telegramRequest(confirmUpdate), env);
+  const approved = await (await callMcp(toolCall(22, "belloria_consume_approved_action", { confirmation_command_id: "7004", confirmed: true }), env)).json();
+  assert.deepEqual(JSON.parse(approved.result.content[0].text), {
+    approved: true,
+    action: {
+      token: "ABC123", source_command_id: "7001", prospect: "Élodie — mariage",
+      sources: ["crm:p-1", "gmail:m-1"], content: "Créer le brouillon exact",
+      consequence: "Créer un brouillon sans envoi"
+    }
+  });
+  assert.equal(env.DB.rows.get("7004").content, null);
+
+  const replay = await (await callMcp(toolCall(23, "belloria_consume_approved_action", { confirmation_command_id: "7004", confirmed: true }), env)).json();
+  assert.deepEqual(JSON.parse(replay.result.content[0].text), { approved: false });
+});
+
+test("rejects expired approvals without erasing the confirmation", async () => {
+  const env = environment();
+  await handleRequest(telegramRequest(textUpdate()), env);
+  await (await callMcp(toolCall(24, "belloria_propose_action", {
+    command_id: "7001", token: "EXPIRE1", prospect: "Prospect", sources: [],
+    content: "Action", consequence: "Conséquence"
+  }), env)).json();
+  env.DB.actions.get("EXPIRE1").expires_at = "2020-01-01T00:00:00Z";
+  const confirmUpdate = textUpdate({ update_id: 7005, message: { message_id: 85, chat: { id: 123456 }, text: "CONFIRMER EXPIRE1" } });
+  await handleRequest(telegramRequest(confirmUpdate), env);
+  const response = await (await callMcp(toolCall(25, "belloria_consume_approved_action", { confirmation_command_id: "7005", confirmed: true }), env)).json();
+  assert.deepEqual(JSON.parse(response.result.content[0].text), { approved: false });
+  assert.equal(env.DB.rows.get("7005").content, "CONFIRMER EXPIRE1");
 });
 
 test("reports a minimal health response", async () => {

@@ -11,6 +11,8 @@ Outils exposés :
 - `belloria_channel_status` indique seulement si Telegram et la transcription sont configurés ; aucun identifiant ni secret n'est renvoyé.
 - `belloria_list_commands` retourne au plus 20 commandes en attente, avec le texte ou la transcription vocale, ainsi que les erreurs vocales mises en quarantaine.
 - `belloria_complete_command` exige `confirmed: true`, marque une commande en attente ou en quarantaine comme traitée et efface son contenu dans D1.
+- `belloria_propose_action` conserve dans D1 le prospect, les sources, le contenu exact, la conséquence et un jeton d’approbation pendant quinze minutes au maximum.
+- `belloria_consume_approved_action` exige `confirmed: true` et l’identifiant d’une commande Telegram contenant exactement `CONFIRMER <jeton>` ; l’action est consommée atomiquement et ne peut pas être rejouée.
 - `belloria_send_text` exige le texte exact et `confirmed: true`, puis envoie uniquement vers le chat Belloria configuré.
 
 Le webhook `POST /webhooks/telegram` vérifie `X-Telegram-Bot-Api-Secret-Token`, compare l'identifiant du chat avec la valeur autorisée et dédoublonne `update_id` dans D1. Un vocal de 5 Mio maximum est téléchargé en mémoire, transcrit en français par Workers AI puis abandonné ; seul le texte transcrit reste jusqu'à la fin de la commande.
@@ -34,4 +36,4 @@ Le serveur Python et les adaptateurs WAHA/Meta restent dans le dépôt uniquemen
 
 ## Validation
 
-Les tests remplacent D1, Telegram et Workers AI par des doubles. Ils couvrent le secret de webhook, la liste blanche du chat, l'idempotence, la limite des vocaux, l'effacement des commandes et la confirmation avant envoi sans aucun appel réel.
+Les tests remplacent D1, Telegram et Workers AI par des doubles. Ils couvrent le secret de webhook, la liste blanche du chat, l'idempotence, la limite des vocaux, l'effacement des commandes, la confirmation exacte, l’expiration et le rejeu sans aucun appel réel.
