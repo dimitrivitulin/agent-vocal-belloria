@@ -3,6 +3,7 @@ const TELEGRAM_TEXT_MAX_CHARS = 4096;
 const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo";
 const FAST_SNAPSHOT_MAX_AGE_MINUTES = 120;
 const FAST_SNAPSHOT_LIMIT = 100;
+const SMS_TEXT_MAX_CHARS = 160;
 
 const TOOLS = [
   {
@@ -436,6 +437,89 @@ export function extractTallySubmission(document) {
   };
 }
 
+function normalizedFieldLabel(field) {
+  return String(field?.label || field?.key || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+export function normalizeFrenchMobile(value) {
+  const compact = String(value || "").trim().replace(/[\s().-]/g, "");
+  let digits = compact.startsWith("+") ? compact.slice(1) : compact;
+  if (digits.startsWith("0033")) digits = digits.slice(2);
+  if (/^0[67]\d{8}$/.test(digits)) digits = `33${digits.slice(1)}`;
+  return /^33[67]\d{8}$/.test(digits) ? digits : null;
+}
+
+export function tallySmsRecipient(fields) {
+  const candidates = (fields || [])
+    .filter((field) => field?.type === "PHONE_NUMBER" || /(?:telephone|mobile|portable)/.test(normalizedFieldLabel(field)))
+    .map((field) => normalizeFrenchMobile(field.value))
+    .filter(Boolean);
+  return new Set(candidates).size === 1 ? candidates[0] : null;
+}
+
+export function tallySmsContent(fields) {
+  const nameField = (fields || []).find((field) => /^(?:prenom|nom|nom et prenom|prenom et nom)$/.test(normalizedFieldLabel(field)));
+  const safeName = typeof nameField?.value === "string" && /^[A-Za-zÀ-ÖØ-öø-ÿ' -]{1,80}$/.test(nameField.value.trim())
+    ? nameField.value.trim().split(/\s+/)[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z'-]/g, "").slice(0, 30)
+    : "";
+  const greeting = safeName ? `Bonjour ${safeName},` : "Bonjour,";
+  const content = `${greeting} votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.`;
+  return content.length <= SMS_TEXT_MAX_CHARS ? content : "Bonjour, votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.";
+}
+
+async function recordSmsResult(env, eventId, status, messageId = null, errorCode = null) {
+  await env.DB.prepare(
+    "UPDATE tally_submissions SET sms_status = ?, sms_provider_id = ?, sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE event_id = ? AND sms_status = 'pending'"
+  ).bind(status, messageId, errorCode, eventId).run();
+}
+
+async function sendTallySms(env, submission) {
+  const recipient = tallySmsRecipient(submission.fields);
+  if (!recipient) return recordSmsResult(env, submission.eventId, "skipped", null, "invalid_or_ambiguous_phone");
+  if (!env.BREVO_API_KEY || !env.BREVO_SMS_SENDER) return recordSmsResult(env, submission.eventId, "skipped", null, "sms_not_configured");
+
+  try {
+    const response = await fetch("https://api.brevo.com/v3/transactionalSMS/send", {
+      method: "POST",
+      headers: { accept: "application/json", "api-key": env.BREVO_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({
+        sender: env.BREVO_SMS_SENDER,
+        recipient,
+        content: tallySmsContent(submission.fields),
+        type: "transactional",
+        unicodeEnabled: false
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.messageId) throw new Error(`brevo_http_${response.status}`);
+    await recordSmsResult(env, submission.eventId, "accepted", String(payload.messageId));
+    console.log(JSON.stringify({ event: "tally_sms_accepted" }));
+  } catch (error) {
+    await recordSmsResult(env, submission.eventId, "failed", null, cleanErrorCode(error, "sms_send_failed"));
+    console.log(JSON.stringify({ event: "tally_sms_failed", code: cleanErrorCode(error, "sms_send_failed") }));
+  }
+}
+
+async function brevoSmsWebhook(request, env) {
+  if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+  const authorization = request.headers.get("authorization") || "";
+  if (!env.BREVO_WEBHOOK_TOKEN || !timingSafeEqual(authorization, `Bearer ${env.BREVO_WEBHOOK_TOKEN}`)) return json({ error: "unauthorized" }, 401);
+  let payload;
+  try { payload = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
+  const messageId = String(payload?.messageId || "");
+  const providerStatus = String(payload?.msg_status || "").toLowerCase();
+  if (!messageId || !providerStatus) return json({ error: "invalid event" }, 400);
+  const status = providerStatus === "delivered" ? "delivered"
+    : ["soft_bounce", "hard_bounce", "rejected", "blocked", "skip", "blacklisted"].includes(providerStatus) ? "failed"
+      : "accepted";
+  const errorCode = status === "failed" ? `brevo_${providerStatus}` : null;
+  const result = await env.DB.prepare(
+    "UPDATE tally_submissions SET sms_status = ?, sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sms_provider_id = ?"
+  ).bind(status, errorCode, messageId).run();
+  console.log(JSON.stringify({ event: "tally_sms_status", status, matched: Number(result.meta?.changes || 0) }));
+  return json({ accepted: Number(result.meta?.changes || 0) > 0 ? 1 : 0 });
+}
+
 async function notifyTallyIngestion(env) {
   try {
     await sendText(env, "Nouvelle demande Tally reçue. Traitement CRM en attente.");
@@ -463,7 +547,9 @@ async function tallyWebhook(request, env, context) {
     "INSERT INTO tally_submissions (event_id, submission_id, form_id, form_name, submitted_at, payload_json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING"
   ).bind(submission.eventId, submission.submissionId, submission.formId, submission.formName, submission.createdAt, JSON.stringify(document)).run();
   const inserted = Number(result.meta?.changes || 0) === 1;
-  if (inserted && context?.waitUntil) context.waitUntil(notifyTallyIngestion(env));
+  if (inserted && context?.waitUntil) {
+    context.waitUntil(Promise.all([notifyTallyIngestion(env), sendTallySms(env, submission)]));
+  }
   console.log(JSON.stringify({ event: "tally_webhook_ingested", accepted: inserted ? 1 : 0, form_id: submission.formId }));
   return json({ accepted: inserted ? 1 : 0 });
 }
@@ -487,7 +573,7 @@ async function listCommands(env, limit) {
 
 async function listTallySubmissions(env, limit) {
   const result = await env.DB.prepare(
-    "SELECT event_id, submission_id, form_id, form_name, submitted_at, created_at FROM tally_submissions WHERE state = 'pending' ORDER BY created_at LIMIT ?"
+    "SELECT event_id, submission_id, form_id, form_name, submitted_at, created_at, sms_status, sms_provider_id, sms_error_code, sms_updated_at FROM tally_submissions WHERE state = 'pending' ORDER BY created_at LIMIT ?"
   ).bind(limit).all();
   return (result.results || []).map((row) => ({
     event_id: row.event_id,
@@ -495,7 +581,11 @@ async function listTallySubmissions(env, limit) {
     form_id: row.form_id,
     form_name: row.form_name,
     submitted_at: row.submitted_at,
-    received_at: row.created_at
+    received_at: row.created_at,
+    sms_status: row.sms_status,
+    sms_provider_id: row.sms_provider_id || undefined,
+    sms_error_code: row.sms_error_code || undefined,
+    sms_updated_at: row.sms_updated_at || undefined
   }));
 }
 
@@ -660,6 +750,7 @@ export async function handleRequest(request, env, context) {
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
   if (path === "/webhooks/tally") return tallyWebhook(request, env, context);
+  if (path === "/webhooks/brevo-sms") return brevoSmsWebhook(request, env);
   return json({ error: "not found" }, 404);
 }
 
@@ -667,7 +758,7 @@ export function createWorkerEntrypoint(oauthProvider) {
   return {
     fetch(request, env, context) {
       const path = new URL(request.url).pathname;
-      if (path === "/health" || path === "/webhooks/telegram" || path === "/webhooks/tally") {
+      if (path === "/health" || path === "/webhooks/telegram" || path === "/webhooks/tally" || path === "/webhooks/brevo-sms") {
         return handleRequest(request, env, context);
       }
       return oauthProvider.fetch(request, env, context);

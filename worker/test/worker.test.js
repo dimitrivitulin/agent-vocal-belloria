@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import test from "node:test";
-import { createWorkerEntrypoint, extractTallySubmission, extractTelegramCommand, handleRequest, oauthApiHandler, oauthDefaultHandler } from "../src/index.js";
+import { createWorkerEntrypoint, extractTallySubmission, extractTelegramCommand, handleRequest, normalizeFrenchMobile, oauthApiHandler, oauthDefaultHandler, tallySmsContent, tallySmsRecipient } from "../src/index.js";
 
 globalThis.crypto ||= webcrypto;
 
@@ -31,7 +31,22 @@ class FakeDb {
     if (sql.startsWith("INSERT INTO tally_submissions")) {
       const [event_id, submission_id, form_id, form_name, submitted_at, payload_json] = args;
       if (this.tally.has(event_id) || [...this.tally.values()].some((row) => row.submission_id === submission_id)) return { meta: { changes: 0 } };
-      this.tally.set(event_id, { event_id, submission_id, form_id, form_name, submitted_at, payload_json, state: "pending", created_at: "2026-08-05T10:00:00Z" });
+      this.tally.set(event_id, { event_id, submission_id, form_id, form_name, submitted_at, payload_json, state: "pending", sms_status: "pending", created_at: "2026-08-05T10:00:00Z" });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE tally_submissions SET sms_status")) {
+      if (sql.includes("WHERE sms_provider_id")) {
+        const [sms_status, sms_error_code, messageId] = args;
+        const row = [...this.tally.values()].find((item) => item.sms_provider_id === messageId);
+        if (!row) return { meta: { changes: 0 } };
+        Object.assign(row, { sms_status, sms_error_code, sms_updated_at: new Date().toISOString() });
+        return { meta: { changes: 1 } };
+      }
+      const [sms_status, sms_provider_id, sms_error_code, eventId] = args;
+      const row = this.tally.get(eventId);
+      if (!row || row.sms_status !== "pending") return { meta: { changes: 0 } };
+      Object.assign(row, { sms_status, sms_provider_id, sms_error_code, sms_updated_at: new Date().toISOString() });
       return { meta: { changes: 1 } };
     }
 
@@ -171,7 +186,10 @@ function tallyEvent(overrides = {}) {
     data: {
       submissionId: "submission-1", formId: "form-belloria", formName: "Devis express",
       createdAt: "2026-08-05T09:58:00Z",
-      fields: [{ key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille" }]
+      fields: [
+        { key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille Martin" },
+        { key: "question-phone", label: "Téléphone", type: "PHONE_NUMBER", value: "06 12 34 56 78" }
+      ]
     },
     ...overrides
   };
@@ -190,6 +208,14 @@ function telegramRequest(payload, secret = "webhook-secret") {
   return new Request("https://worker.test/webhooks/telegram", {
     method: "POST",
     headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": secret },
+    body: JSON.stringify(payload)
+  });
+}
+
+function brevoWebhook(payload, token = "brevo-webhook-token") {
+  return new Request("https://worker.test/webhooks/brevo-sms", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(payload)
   });
 }
@@ -239,9 +265,26 @@ test("extracts only complete Tally form response events", () => {
   assert.deepEqual(extractTallySubmission(tallyEvent()), {
     eventId: "event-1", submissionId: "submission-1", formId: "form-belloria",
     formName: "Devis express", createdAt: "2026-08-05T09:58:00Z",
-    fields: [{ key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille" }]
+    fields: [
+      { key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille Martin" },
+      { key: "question-phone", label: "Téléphone", type: "PHONE_NUMBER", value: "06 12 34 56 78" }
+    ]
   });
   assert.equal(extractTallySubmission({ eventType: "FORM_RESPONSE", data: {} }), null);
+});
+
+test("normalizes one French mobile and builds one safe GSM-7 acknowledgement", () => {
+  assert.equal(normalizeFrenchMobile("06 12 34 56 78"), "33612345678");
+  assert.equal(normalizeFrenchMobile("+33 7 12 34 56 78"), "33712345678");
+  assert.equal(normalizeFrenchMobile("01 23 45 67 89"), null);
+  assert.equal(tallySmsRecipient(tallyEvent().data.fields), "33612345678");
+  assert.equal(tallySmsRecipient([
+    { label: "Téléphone", value: "0612345678" }, { label: "Mobile", value: "0712345678" }
+  ]), null);
+  const content = tallySmsContent(tallyEvent().data.fields);
+  assert.equal(content, "Bonjour Camille, votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.");
+  assert.ok(content.length <= 160);
+  assert.match(content, /^[\x20-\x7E]+$/);
 });
 
 test("authenticates webhook, allowlists one chat and deduplicates updates", async () => {
@@ -355,6 +398,66 @@ test("acknowledges a newly persisted Tally submission on Telegram only once", as
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test("sends one transactional SMS for a new Tally event and records the provider result", async () => {
+  const originalFetch = globalThis.fetch;
+  const smsCalls = [];
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes("api.telegram.org")) return Response.json({ ok: true, result: { message_id: 99 } });
+    assert.equal(String(url), "https://api.brevo.com/v3/transactionalSMS/send");
+    assert.equal(init.headers["api-key"], "brevo-test-key");
+    smsCalls.push(JSON.parse(init.body));
+    return Response.json({ messageId: 1511882900176220 });
+  };
+  try {
+    const env = environment({ BREVO_API_KEY: "brevo-test-key", BREVO_SMS_SENDER: "Belloria" });
+    const firstContext = executionContext();
+    await handleRequest(await tallyRequest(tallyEvent()), env, firstContext);
+    await firstContext.drain();
+    const replayContext = executionContext();
+    await handleRequest(await tallyRequest(tallyEvent()), env, replayContext);
+    await replayContext.drain();
+
+    assert.deepEqual(smsCalls, [{
+      sender: "Belloria",
+      recipient: "33612345678",
+      content: "Bonjour Camille, votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.",
+      type: "transactional",
+      unicodeEnabled: false
+    }]);
+    assert.equal(env.DB.tally.get("event-1").sms_status, "accepted");
+    assert.equal(env.DB.tally.get("event-1").sms_provider_id, "1511882900176220");
+    assert.equal(JSON.stringify(env.DB.tally.get("event-1")).includes("33612345678"), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("authenticates Brevo delivery callbacks and updates the matching SMS only", async () => {
+  const env = environment({ BREVO_WEBHOOK_TOKEN: "brevo-webhook-token" });
+  env.DB.tally.set("event-1", { event_id: "event-1", state: "pending", sms_status: "accepted", sms_provider_id: "1511882900176220" });
+  assert.equal((await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "delivered" }, "wrong"), env)).status, 401);
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "delivered" }), env)).json(), { accepted: 1 });
+  assert.equal(env.DB.tally.get("event-1").sms_status, "delivered");
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 999, msg_status: "hard_bounce", to: "33600000000" }), env)).json(), { accepted: 0 });
+  assert.equal(JSON.stringify(env.DB.tally.get("event-1")).includes("33600000000"), false);
+});
+
+test("keeps the Tally request pending when SMS cannot be sent", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /api\.telegram\.org/);
+    return Response.json({ ok: true, result: { message_id: 99 } });
+  };
+  try {
+    const env = environment();
+    const context = executionContext();
+    await handleRequest(await tallyRequest(tallyEvent()), env, context);
+    await context.drain();
+    const row = env.DB.tally.get("event-1");
+    assert.equal(row.state, "pending");
+    assert.equal(row.sms_status, "skipped");
+    assert.equal(row.sms_error_code, "sms_not_configured");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("lists Tally metadata, exposes one fallback payload and erases it after CRM completion", async () => {
   const env = environment();
   await handleRequest(await tallyRequest(tallyEvent()), env);
@@ -363,10 +466,11 @@ test("lists Tally metadata, exposes one fallback payload and erases it after CRM
   const submissions = JSON.parse(listed.result.content[0].text).submissions;
   assert.equal(submissions.length, 1);
   assert.equal(submissions[0].event_id, "event-1");
+  assert.equal(submissions[0].sms_status, "pending");
   assert.equal("payload" in submissions[0], false);
 
   const fallback = await (await callMcp(toolCall(41, "belloria_get_tally_submission_fallback", { event_id: "event-1" }), env)).json();
-  assert.equal(JSON.parse(fallback.result.content[0].text).payload.data.fields[0].value, "Camille");
+  assert.equal(JSON.parse(fallback.result.content[0].text).payload.data.fields[0].value, "Camille Martin");
 
   const absent = await (await callMcp(toolCall(42, "belloria_get_tally_submission_fallback", { event_id: "missing" }), env)).json();
   assert.deepEqual(JSON.parse(absent.result.content[0].text), { found: false, event_id: "missing" });

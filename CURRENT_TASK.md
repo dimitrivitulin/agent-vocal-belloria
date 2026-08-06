@@ -1,31 +1,31 @@
-# BELL-036 — Notification Telegram immédiate des demandes Tally
+# BELL-037 — Accusé SMS transactionnel immédiat
 
-Statut: completed
-Branche: `codex/bell-036-tally-trigger-telegram`
-Dernière mise à jour: 2026-08-06 02:31 CEST
+Statut: ready_for_review
+Branche: `codex/bell-037-tally-sms-ack`
+Dernière mise à jour: 2026-08-06
 
 ## Objectif
 
-Après une soumission Tally, prévenir Belloria immédiatement sur Telegram sans ajouter de service ni d'API payante.
+Après une nouvelle soumission Tally, envoyer un accusé SMS transactionnel immédiat, sobre et idempotent, sans promesse commerciale.
 
 ## Périmètre
 
-- Envoyer depuis le Worker une notification Telegram technique, concise et sans payload personnel inutile après ingestion D1 réussie.
-- Conserver D1 comme file anti-perte et le passage horaire comme reprise.
-- Faire produire par l'agent la notification Telegram finale après succès Notion, sans envoi client.
-- Ne jamais journaliser le payload Tally.
+- Extraire et valider un numéro français depuis les champs structurés Tally.
+- Envoyer par Brevo un message transactionnel d'un segment, avec prénom seulement si non ambigu.
+- Tracer état, identifiant fournisseur et erreur assainie dans D1 sans dupliquer le numéro.
+- Conserver la demande `pending` indépendamment du résultat SMS et ne contacter aucun prospect pendant les tests.
 
 ## Critères de réussite
 
-- Une soumission réelle reçoit un accusé Telegram en moins d'une minute.
-- Un rejeu du même événement ne produit pas une seconde notification.
-- La notification finale confirme le succès CRM ; une erreur reste visible et l'événement demeure `pending`.
-- Tests Worker, passage réel contrôlé, `git diff --check` et examen du diff réussissent.
+- Un événement nouveau et valide déclenche au plus un appel fournisseur ; un rejeu n'en déclenche aucun.
+- Numéro absent/ambigu/invalide et configuration absente n'envoient rien et restent observables.
+- Le texte ne contient ni prix, ni disponibilité, ni promesse et tient dans un segment GSM-7.
+- Migration, tests Worker, `git diff --check` et examen du diff réussissent.
 
-## Décision
+## Validation externe
 
-Ne pas utiliser Workspace Agents API afin de ne pas ajouter de coût. Le webhook assure l'alerte immédiate ; la tâche ChatGPT Work horaire reste responsable du traitement Tally→Notion et de la confirmation finale.
+Le déploiement, la configuration des secrets et tout SMS réel nécessitent un compte Brevo prêt et une confirmation explicite avant l'envoi de validation.
 
-## Résultat
+## Résultat local
 
-L'accusé Telegram minimal est déployé sur la version Worker `031755de-3195-4c20-b6d1-2489a69e87dd`. Les 22 tests Worker passent et `/health` répond correctement. La soumission contrôlée `ArA1Dzk` a été signalée à l'ingestion, retrouvée via Tally, synchronisée dans Notion puis acquittée ; le second acquittement a retourné `completed: false`. La file D1 est vide, la confirmation finale Telegram a été envoyée (`message_id: 16`) et la fiche CRM de test a été mise à la corbeille.
+Intégration Brevo, message mono-segment, validation mobile français, états D1 et callback authentifié livrés. Les 26 tests Worker et 77 tests Python passent. Aucun SMS réel n'a été envoyé et aucun secret n'a été configuré.

@@ -7,6 +7,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class D1MigrationTests(unittest.TestCase):
+    def test_tally_sms_schema_tracks_provider_status_without_copying_recipient(self):
+        database = sqlite3.connect(":memory:")
+        for migration in ("0005_tally_submissions.sql", "0006_tally_sms_ack.sql"):
+            database.executescript(
+                (ROOT / "worker" / "migrations" / migration).read_text(encoding="utf-8")
+            )
+        columns = {
+            row[1] for row in database.execute("PRAGMA table_info(tally_submissions)")
+        }
+        self.assertTrue(
+            {"sms_status", "sms_provider_id", "sms_error_code", "sms_updated_at"}
+            <= columns
+        )
+        self.assertNotIn("sms_recipient", columns)
+
     def test_action_approval_schema_supports_atomic_confirmation(self):
         database = sqlite3.connect(":memory:")
         for migration in ("0002_telegram_commands.sql", "0003_telegram_action_approvals.sql"):
