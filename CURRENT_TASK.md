@@ -11,7 +11,7 @@ Après une nouvelle soumission Tally, envoyer un accusé SMS transactionnel imm�
 ## Périmètre
 
 - Extraire et valider un numéro français depuis les champs structurés Tally.
-- Envoyer par Brevo un message transactionnel à trous contenant le prénom, le type et la date de l'événement, une offre adaptée annoncée sans promesse et un appel à contacter Belloria.
+- Envoyer par Brevo un message transactionnel à trous contenant le prénom, le type et la date de l'événement, une réponse rapide annoncée et un appel à contacter Belloria pour plus d'informations.
 - Tracer état, identifiant fournisseur et erreur assainie dans D1 sans dupliquer le numéro.
 - Conserver la demande `pending` indépendamment du résultat SMS et ne contacter aucun prospect pendant les tests.
 

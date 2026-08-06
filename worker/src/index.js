@@ -491,7 +491,7 @@ export function tallySmsContent(fields) {
   const eventName = safeEventName ? `${safeEventName[0].toLowerCase()}${safeEventName.slice(1)}` : null;
   const eventDate = frenchSmsDate(tallyFieldValue(fields, /^(?:date|date de l'evenement|quand)$/));
   if (!name || !eventName || !eventDate) return null;
-  const content = `Bonjour ${name}, votre ${eventName} du ${eventDate} est bien note. Offre adaptee a vos informations. Une question ? Contactez-nous. Chaleureusement, Belloria`;
+  const content = `Bonjour ${name}, votre ${eventName} du ${eventDate} est bien note. Nous vous repondrons vite. Pour plus d'informations, contactez-nous. Chaleureusement, Belloria`;
   return content.length <= SMS_TEXT_MAX_CHARS ? content : null;
 }
 
