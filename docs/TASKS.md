@@ -56,6 +56,22 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [ ] **BELL-040 — Réduction du passage planifié Work** (`pending`)
+  Après validation des déclenchements événementiels, retirer au passage horaire le traitement commercial nominal et réduire progressivement sa fréquence : quatre heures, puis contrôle quotidien selon les mesures. Le conserver pour reprendre les soumissions, analyses, SMS ou commandes bloqués et produire le briefing anti-perte.
+  **Terminé lorsque** les demandes nominales sont traitées par événement, que les événements abandonnés sont repris automatiquement et que la baisse de fréquence réduit la consommation sans régression de délai ni perte.
+
+- [ ] **BELL-039 — Pilotage des actions commerciales depuis Telegram** (`pending`)
+  Après analyse, permettre de préparer un email, recommander un appel ou une relance et exécuter uniquement les actions externes explicitement validées dans Telegram. Conserver le destinataire, le contenu approuvé et le résultat dans une trace idempotente.
+  **Terminé lorsque** Belloria peut passer d'une analyse prospect à une action commerciale contrôlée sans envoi ambigu, doublon ni promesse non vérifiée.
+
+- [ ] **BELL-038 — Analyse ChatGPT Work déclenchée depuis Telegram** (`pending`)
+  Déclencher à la demande l'analyse d'une soumission Tally ou d'un prospect depuis Telegram, sans attendre le passage planifié, puis restituer le résultat dans le même canal. Utiliser un identifiant technique et conserver le passage planifié uniquement comme reprise anti-perte.
+  **Terminé lorsque** `ANALYSE DERNIÈRE DEMANDE` lance une analyse Tally→contexte 360→recommandation et répond sur Telegram, avec déduplication, suivi d'échec et continuité du contexte prospect.
+
+- [ ] **BELL-037 — Accusé SMS transactionnel immédiat** (`pending`)
+  Envoyer après une nouvelle soumission Tally un SMS déterministe, personnalisé uniquement avec les faits structurés du formulaire, sans prix, disponibilité ni contenu inventé. Prévoir information du prospect, validation du numéro, statut de livraison, idempotence et modèle générique en cas d'ambiguïté.
+  **Terminé lorsque** un prospect reçoit en quelques secondes un accusé d'un seul segment, qu'un rejeu ne renvoie rien et qu'un échec SMS reste visible sans perdre la demande.
+
 - [ ] **BELL-036 — Notification Telegram immédiate des demandes Tally** (`in_progress`)
   Envoyer sans coût supplémentaire un accusé Telegram dès l'ingestion du webhook, avec D1 comme file anti-perte et le passage horaire comme traitement CRM.
   **Terminé lorsque** une soumission contrôlée est signalée en moins d'une minute, qu'un rejeu ne renvoie pas de seconde notification et que le traitement horaire reste intact.
