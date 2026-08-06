@@ -28,4 +28,4 @@ Le déploiement, la configuration des secrets et tout SMS réel nécessitent un 
 
 ## Résultat local
 
-Intégration Brevo, modèle chaleureux `{prenom}` / `{evenement}` / `{date}` avec appel à contacter Belloria, validation mobile français, états D1 et callback authentifié livrés. Les 26 tests Worker et 78 tests Python passent. Le fournisseur et l'expéditeur ont été validés par un SMS réel livré ; le nouveau modèle attend son déploiement et une validation Tally de bout en bout.
+Intégration Brevo, modèle chaleureux `{prenom}` / `{evenement}` / `{date}` avec appel à contacter Belloria, validation mobile français, états D1 et callback authentifié livrés. Les 26 tests Worker et 78 tests Python passent. Le fournisseur et l'expéditeur ont été validés par un SMS réel livré ; le déploiement du nouveau modèle et la validation Tally de bout en bout sont reportés dans BELL-041.
