@@ -2,7 +2,7 @@
 
 Statut: in_progress
 Branche: `codex/bell-036-tally-trigger-telegram`
-Dernière mise à jour: 2026-08-06
+Dernière mise à jour: 2026-08-06 01:38 CEST
 
 ## Objectif
 
@@ -28,8 +28,8 @@ Ne pas utiliser Workspace Agents API afin de ne pas ajouter de coût. Le webhook
 
 ## Prochaine action
 
-Après accord explicite de mise en production, déployer l'accusé Telegram et effectuer une soumission Tally contrôlée.
+Après le prochain passage horaire, vérifier que `ArA1Dzk` est synchronisée puis acquittée, que la confirmation Telegram finale est reçue et que le rejeu reste sans doublon. Retirer la fiche CRM de test si le passage l'a créée.
 
 ## Résultat intermédiaire
 
-L'accusé Telegram minimal est planifié par `waitUntil` uniquement après une nouvelle insertion D1 ; un rejeu ne renvoie rien et une erreur Telegram ne remet pas en cause la file anti-perte. 22 tests Worker passent. La suite Python n'a pas pu démarrer faute d'interpréteur disponible.
+L'accusé Telegram minimal est déployé sur la version Worker `031755de-3195-4c20-b6d1-2489a69e87dd`. Les 22 tests Worker passent et `/health` répond correctement. La soumission réelle contrôlée `ArA1Dzk` a été reçue dans D1 à la même seconde que Tally et reste `pending` avant le passage horaire ; le secret de signature n'étant pas stocké localement, le rejeu réel reste à constater côté fournisseur. La suite Python n'a pas pu démarrer faute d'interpréteur disponible.
