@@ -457,14 +457,40 @@ export function tallySmsRecipient(fields) {
   return new Set(candidates).size === 1 ? candidates[0] : null;
 }
 
+function tallyFieldValue(fields, labelPattern) {
+  const values = (fields || [])
+    .filter((field) => labelPattern.test(normalizedFieldLabel(field)))
+    .flatMap((field) => Array.isArray(field?.value) ? field.value : [field?.value])
+    .filter((value) => typeof value === "string" && value.trim())
+    .map((value) => value.trim());
+  return new Set(values).size === 1 ? values[0] : null;
+}
+
+function safeSmsText(value, maxLength) {
+  if (!value || value.length > 100) return null;
+  const ascii = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9' -]/g, "").replace(/\s+/g, " ").trim();
+  return ascii && ascii.length <= maxLength ? ascii : null;
+}
+
+function frenchSmsDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  const months = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
+  return `${day} ${months[month - 1]} ${year}`;
+}
+
 export function tallySmsContent(fields) {
-  const nameField = (fields || []).find((field) => /^(?:prenom|nom|nom et prenom|prenom et nom)$/.test(normalizedFieldLabel(field)));
-  const safeName = typeof nameField?.value === "string" && /^[A-Za-zÀ-ÖØ-öø-ÿ' -]{1,80}$/.test(nameField.value.trim())
-    ? nameField.value.trim().split(/\s+/)[0].normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z'-]/g, "").slice(0, 30)
-    : "";
-  const greeting = safeName ? `Bonjour ${safeName},` : "Bonjour,";
-  const content = `${greeting} votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.`;
-  return content.length <= SMS_TEXT_MAX_CHARS ? content : "Bonjour, votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.";
+  const name = safeSmsText(tallyFieldValue(fields, /^(?:prenom|nom|nom et prenom|prenom et nom|nom complet)$/), 50);
+  const eventName = safeSmsText(tallyFieldValue(fields, /^(?:type d'evenement|evenement|type de prestation|nom de l'evenement)$/), 40);
+  const eventDate = frenchSmsDate(tallyFieldValue(fields, /^(?:date|date de l'evenement|quand)$/));
+  if (!name || !eventName || !eventDate) return null;
+  const content = `Bonjour ${name}, votre demande pour votre ${eventName} du ${eventDate} a bien ete recue par Belloria. Nous revenons vers vous rapidement.`;
+  return content.length <= SMS_TEXT_MAX_CHARS ? content : null;
 }
 
 async function recordSmsResult(env, eventId, status, messageId = null, errorCode = null) {
@@ -476,6 +502,8 @@ async function recordSmsResult(env, eventId, status, messageId = null, errorCode
 async function sendTallySms(env, submission) {
   const recipient = tallySmsRecipient(submission.fields);
   if (!recipient) return recordSmsResult(env, submission.eventId, "skipped", null, "invalid_or_ambiguous_phone");
+  const content = tallySmsContent(submission.fields);
+  if (!content) return recordSmsResult(env, submission.eventId, "skipped", null, "missing_or_invalid_sms_personalization");
   if (!env.BREVO_API_KEY || !env.BREVO_SMS_SENDER) return recordSmsResult(env, submission.eventId, "skipped", null, "sms_not_configured");
 
   try {
@@ -485,7 +513,7 @@ async function sendTallySms(env, submission) {
       body: JSON.stringify({
         sender: env.BREVO_SMS_SENDER,
         recipient,
-        content: tallySmsContent(submission.fields),
+        content,
         type: "transactional",
         unicodeEnabled: false
       })

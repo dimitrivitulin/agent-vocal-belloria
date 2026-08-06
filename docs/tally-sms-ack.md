@@ -6,7 +6,7 @@ Une nouvelle soumission Tally persistée dans D1 déclenche en arrière-plan un 
 
 Le numéro doit être un mobile français `06` ou `07`, accepté en format national ou `+33`. Plusieurs numéros valides différents, un fixe ou un numéro étranger entraînent `skipped`. Le Worker ne duplique pas le numéro dans les colonnes de suivi.
 
-Message générique : `Bonjour, votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.` Un prénom simple et non ambigu peut être ajouté. Le texte reste ASCII, sous 160 caractères, sans prix, disponibilité, engagement de délai ni contenu commercial.
+Modèle à trous : `Bonjour {nom}, votre demande pour votre {evenement} du {date} a bien ete recue par Belloria. Nous revenons vers vous rapidement.` Les trois valeurs proviennent exclusivement des champs structurés Tally. Si le nom, le type d'événement ou la date manque, est ambigu ou rend le texte trop long, aucun SMS n'est envoyé et D1 indique `missing_or_invalid_sms_personalization`. Le texte reste ASCII, sous 160 caractères, sans prix, disponibilité, engagement de délai ni contenu commercial.
 
 ## Configuration sans secret dans Git
 
@@ -23,7 +23,7 @@ Configurer ensuite chez Brevo un webhook transactionnel, canal `sms`, vers `/web
 - `accepted` : Brevo a accepté l'envoi ;
 - `delivered` : callback de livraison reçu ;
 - `failed` : appel fournisseur ou livraison en échec ;
-- `skipped` : numéro invalide/ambigu ou fournisseur non configuré.
+- `skipped` : numéro invalide/ambigu, personnalisation obligatoire absente/invalide ou fournisseur non configuré.
 
 `belloria_list_tally_submissions` expose ces métadonnées techniques et un code d'erreur assaini, sans numéro ni contenu SMS. Le payload Tally reste soumis à son effacement après succès CRM.
 

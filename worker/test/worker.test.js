@@ -188,7 +188,9 @@ function tallyEvent(overrides = {}) {
       createdAt: "2026-08-05T09:58:00Z",
       fields: [
         { key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille Martin" },
-        { key: "question-phone", label: "Téléphone", type: "PHONE_NUMBER", value: "06 12 34 56 78" }
+        { key: "question-phone", label: "Téléphone", type: "PHONE_NUMBER", value: "06 12 34 56 78" },
+        { key: "question-event", label: "Type d'événement", type: "MULTIPLE_CHOICE", value: "Mariage" },
+        { key: "question-date", label: "Date de l'événement", type: "DATE", value: "2026-10-03" }
       ]
     },
     ...overrides
@@ -267,7 +269,9 @@ test("extracts only complete Tally form response events", () => {
     formName: "Devis express", createdAt: "2026-08-05T09:58:00Z",
     fields: [
       { key: "question-name", label: "Nom", type: "INPUT_TEXT", value: "Camille Martin" },
-      { key: "question-phone", label: "Téléphone", type: "PHONE_NUMBER", value: "06 12 34 56 78" }
+      { key: "question-phone", label: "Téléphone", type: "PHONE_NUMBER", value: "06 12 34 56 78" },
+      { key: "question-event", label: "Type d'événement", type: "MULTIPLE_CHOICE", value: "Mariage" },
+      { key: "question-date", label: "Date de l'événement", type: "DATE", value: "2026-10-03" }
     ]
   });
   assert.equal(extractTallySubmission({ eventType: "FORM_RESPONSE", data: {} }), null);
@@ -282,9 +286,10 @@ test("normalizes one French mobile and builds one safe GSM-7 acknowledgement", (
     { label: "Téléphone", value: "0612345678" }, { label: "Mobile", value: "0712345678" }
   ]), null);
   const content = tallySmsContent(tallyEvent().data.fields);
-  assert.equal(content, "Bonjour Camille, votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.");
+  assert.equal(content, "Bonjour Camille Martin, votre demande pour votre Mariage du 3 octobre 2026 a bien ete recue par Belloria. Nous revenons vers vous rapidement.");
   assert.ok(content.length <= 160);
   assert.match(content, /^[\x20-\x7E]+$/);
+  assert.equal(tallySmsContent(tallyEvent().data.fields.filter((field) => field.type !== "DATE")), null);
 });
 
 test("authenticates webhook, allowlists one chat and deduplicates updates", async () => {
@@ -420,7 +425,7 @@ test("sends one transactional SMS for a new Tally event and records the provider
     assert.deepEqual(smsCalls, [{
       sender: "Belloria",
       recipient: "33612345678",
-      content: "Bonjour Camille, votre demande a bien ete recue par Belloria. Nous revenons vers vous rapidement.",
+      content: "Bonjour Camille Martin, votre demande pour votre Mariage du 3 octobre 2026 a bien ete recue par Belloria. Nous revenons vers vous rapidement.",
       type: "transactional",
       unicodeEnabled: false
     }]);
