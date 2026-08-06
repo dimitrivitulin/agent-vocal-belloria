@@ -485,11 +485,12 @@ function frenchSmsDate(value) {
 }
 
 export function tallySmsContent(fields) {
-  const name = safeSmsText(tallyFieldValue(fields, /^(?:prenom|nom|nom et prenom|prenom et nom|nom complet)$/), 50);
+  const fullName = safeSmsText(tallyFieldValue(fields, /^(?:prenom|nom|nom et prenom|prenom et nom|nom complet)$/), 50);
+  const name = fullName?.split(/\s+/)[0] || null;
   const eventName = safeSmsText(tallyFieldValue(fields, /^(?:type d'evenement|evenement|type de prestation|nom de l'evenement)$/), 40);
   const eventDate = frenchSmsDate(tallyFieldValue(fields, /^(?:date|date de l'evenement|quand)$/));
   if (!name || !eventName || !eventDate) return null;
-  const content = `Bonjour ${name}, votre demande pour votre ${eventName} du ${eventDate} a bien ete recue par Belloria. Nous revenons vers vous rapidement.`;
+  const content = `Bonjour ${name}, votre ${eventName} du ${eventDate} est bien note. Offre adaptee a vos informations. Une question ? Contactez-nous. Chaleureusement, Belloria`;
   return content.length <= SMS_TEXT_MAX_CHARS ? content : null;
 }
 

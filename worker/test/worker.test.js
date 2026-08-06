@@ -286,7 +286,7 @@ test("normalizes one French mobile and builds one safe GSM-7 acknowledgement", (
     { label: "Téléphone", value: "0612345678" }, { label: "Mobile", value: "0712345678" }
   ]), null);
   const content = tallySmsContent(tallyEvent().data.fields);
-  assert.equal(content, "Bonjour Camille Martin, votre demande pour votre Mariage du 3 octobre 2026 a bien ete recue par Belloria. Nous revenons vers vous rapidement.");
+  assert.equal(content, "Bonjour Camille, votre Mariage du 3 octobre 2026 est bien note. Offre adaptee a vos informations. Une question ? Contactez-nous. Chaleureusement, Belloria");
   assert.ok(content.length <= 160);
   assert.match(content, /^[\x20-\x7E]+$/);
   assert.equal(tallySmsContent(tallyEvent().data.fields.filter((field) => field.type !== "DATE")), null);
@@ -425,7 +425,7 @@ test("sends one transactional SMS for a new Tally event and records the provider
     assert.deepEqual(smsCalls, [{
       sender: "Belloria",
       recipient: "33612345678",
-      content: "Bonjour Camille Martin, votre demande pour votre Mariage du 3 octobre 2026 a bien ete recue par Belloria. Nous revenons vers vous rapidement.",
+      content: "Bonjour Camille, votre Mariage du 3 octobre 2026 est bien note. Offre adaptee a vos informations. Une question ? Contactez-nous. Chaleureusement, Belloria",
       type: "transactional",
       unicodeEnabled: false
     }]);

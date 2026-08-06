@@ -11,7 +11,7 @@ Après une nouvelle soumission Tally, envoyer un accusé SMS transactionnel imm�
 ## Périmètre
 
 - Extraire et valider un numéro français depuis les champs structurés Tally.
-- Envoyer par Brevo un message transactionnel à trous contenant le nom, le type et la date de l'événement, uniquement si les trois valeurs sont sûres.
+- Envoyer par Brevo un message transactionnel à trous contenant le prénom, le type et la date de l'événement, une offre adaptée annoncée sans promesse et un appel à contacter Belloria.
 - Tracer état, identifiant fournisseur et erreur assainie dans D1 sans dupliquer le numéro.
 - Conserver la demande `pending` indépendamment du résultat SMS et ne contacter aucun prospect pendant les tests.
 
@@ -28,4 +28,4 @@ Le déploiement, la configuration des secrets et tout SMS réel nécessitent un 
 
 ## Résultat local
 
-Intégration Brevo, modèle `{nom}` / `{evenement}` / `{date}`, validation mobile français, états D1 et callback authentifié livrés. Les 26 tests Worker et 78 tests Python passent. Le fournisseur et l'expéditeur ont été validés par un SMS réel livré ; le nouveau modèle à trous attend son déploiement et une validation Tally de bout en bout.
+Intégration Brevo, modèle chaleureux `{prenom}` / `{evenement}` / `{date}` avec appel à contacter Belloria, validation mobile français, états D1 et callback authentifié livrés. Les 26 tests Worker et 78 tests Python passent. Le fournisseur et l'expéditeur ont été validés par un SMS réel livré ; le nouveau modèle attend son déploiement et une validation Tally de bout en bout.
