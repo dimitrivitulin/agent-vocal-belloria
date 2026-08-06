@@ -292,6 +292,23 @@ test("normalizes one French mobile and builds one safe GSM-7 acknowledgement", (
   assert.equal(tallySmsContent(tallyEvent().data.fields.filter((field) => field.type !== "DATE")), null);
 });
 
+test("builds the acknowledgement from the current production Tally labels", () => {
+  const fields = [
+    { label: "Votre nom et prénom", type: "INPUT_TEXT", value: "Cyndy Hernandez" },
+    { label: "Télephone", type: "INPUT_PHONE_NUMBER", value: "+33612345678" },
+    {
+      label: "Quel type d'évènement envisagez-vous?",
+      type: "MULTIPLE_CHOICE",
+      value: ["anniversaire-option-id"],
+      options: [{ id: "anniversaire-option-id", text: "Anniversaire🎂" }]
+    },
+    { label: "Date de votre évènement", type: "INPUT_DATE", value: "2027-03-16" }
+  ];
+
+  assert.equal(tallySmsRecipient(fields), "33612345678");
+  assert.equal(tallySmsContent(fields), "Bonjour Cyndy, votre anniversaire du 16 mars 2027 est bien note. Nous vous repondrons vite. Pour plus d'informations, contactez-nous. Chaleureusement, Belloria");
+});
+
 test("authenticates webhook, allowlists one chat and deduplicates updates", async () => {
   const env = environment();
   assert.equal((await handleRequest(telegramRequest(textUpdate(), "wrong"), env)).status, 401);
@@ -432,6 +449,25 @@ test("sends one transactional SMS for a new Tally event and records the provider
     assert.equal(env.DB.tally.get("event-1").sms_status, "accepted");
     assert.equal(env.DB.tally.get("event-1").sms_provider_id, "1511882900176220");
     assert.equal(JSON.stringify(env.DB.tally.get("event-1")).includes("33612345678"), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("records a sanitized Brevo HTTP failure without losing the Tally request", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => String(url).includes("api.telegram.org")
+    ? Response.json({ ok: true, result: { message_id: 99 } })
+    : Response.json({ code: "not_enough_credits", message: "sensitive provider detail" }, { status: 402 });
+  try {
+    const env = environment({ BREVO_API_KEY: "brevo-test-key", BREVO_SMS_SENDER: "Belloria" });
+    const context = executionContext();
+    await handleRequest(await tallyRequest(tallyEvent()), env, context);
+    await context.drain();
+
+    const row = env.DB.tally.get("event-1");
+    assert.equal(row.state, "pending");
+    assert.equal(row.sms_status, "failed");
+    assert.equal(row.sms_error_code, "brevo_http_402");
+    assert.equal(JSON.stringify(row).includes("sensitive provider detail"), false);
   } finally { globalThis.fetch = originalFetch; }
 });
 

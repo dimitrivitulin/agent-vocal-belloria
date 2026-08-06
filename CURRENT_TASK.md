@@ -1,31 +1,35 @@
-# BELL-037 — Accusé SMS transactionnel immédiat
+# BELL-041 — Déploiement et validation réelle du SMS Tally
 
-Statut: ready_for_review
-Branche: `codex/bell-037-tally-sms-ack`
+Statut: blocked
+Branche: `codex/bell-041-sms-tally-validation`
 Dernière mise à jour: 2026-08-06
 
 ## Objectif
 
-Après une nouvelle soumission Tally, envoyer un accusé SMS transactionnel immédiat, sobre et idempotent, sans promesse commerciale.
+Déployer le modèle SMS chaleureux de BELL-037 et valider le parcours Tally→Worker→Brevo sur un numéro appartenant à Belloria.
 
 ## Périmètre
 
-- Extraire et valider un numéro français depuis les champs structurés Tally.
-- Envoyer par Brevo un message transactionnel à trous contenant le prénom, le type et la date de l'événement, une réponse rapide annoncée et un appel à contacter Belloria pour plus d'informations.
-- Tracer état, identifiant fournisseur et erreur assainie dans D1 sans dupliquer le numéro.
-- Conserver la demande `pending` indépendamment du résultat SMS et ne contacter aucun prospect pendant les tests.
+- Valider localement le Worker, la migration et le modèle d'un segment.
+- Contrôler la configuration distante sans exposer de secret, appliquer la migration et déployer le Worker.
+- Après confirmation explicite, effectuer une soumission Tally contrôlée vers un numéro Belloria.
+- Vérifier la personnalisation, la livraison, le callback D1, l'idempotence au rejeu et nettoyer les données de test.
 
 ## Critères de réussite
 
-- Un événement nouveau et valide déclenche au plus un appel fournisseur ; un rejeu n'en déclenche aucun.
-- Numéro ou personnalisation obligatoire absent/ambigu/invalide et configuration absente n'envoient rien et restent observables.
-- Le texte ne contient ni prix, ni disponibilité, ni promesse et tient dans un segment GSM-7.
-- Migration, tests Worker, `git diff --check` et examen du diff réussissent.
+- Le SMS reçu contient les bonnes valeurs `{prenom}`, `{evenement}` et `{date}` dans un seul segment.
+- D1 atteint `delivered`, la soumission reste disponible pour le flux CRM et le rejeu ne renvoie aucun SMS.
+- Aucun secret, numéro, payload ou artefact de test ne subsiste dans Git ou les services après validation.
+- Tests, `git diff --check`, examen du diff, commit et publication de la branche réussissent.
 
-## Validation externe
+## Autorisation externe
 
-Le déploiement, la configuration des secrets et tout SMS réel nécessitent un compte Brevo prêt et une confirmation explicite avant l'envoi de validation.
+Le déploiement et les contrôles distants non communicants sont dans le lot. La soumission Tally et le SMS réel exigent une confirmation explicite juste avant l'envoi.
 
-## Résultat local
+## Résultat au 2026-08-06
 
-Intégration Brevo, modèle chaleureux `{prenom}` / `{evenement}` / `{date}` avec appel à contacter Belloria, validation mobile français, états D1 et callback authentifié livrés. Les 26 tests Worker et 78 tests Python passent. Le fournisseur et l'expéditeur ont été validés par un SMS réel livré ; le déploiement du nouveau modèle et la validation Tally de bout en bout sont reportés dans BELL-041.
+Le Worker résout désormais les identifiants d'options Tally vers leur texte et reconnaît les types réels `INPUT_DATE` / `INPUT_PHONE_NUMBER`. Trois soumissions contrôlées n'ont envoyé aucun SMS : deux ont révélé puis validé le correctif de parsing ; la troisième a atteint Brevo mais a été refusée car le compte affiche 0 crédit prépayé. Le Worker déployé trace maintenant le statut HTTP Brevo assaini ; 28 tests Worker et 78 tests Python passent.
+
+## Blocage et reprise
+
+Acheter des crédits SMS Brevo, puis effectuer une dernière soumission contrôlée après confirmation explicite. Vérifier `accepted` puis `delivered`, le segment unique et le rejeu idempotent, avant de supprimer les trois soumissions de test Tally/D1/CRM et de terminer le lot.

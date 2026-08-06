@@ -451,18 +451,25 @@ export function normalizeFrenchMobile(value) {
 
 export function tallySmsRecipient(fields) {
   const candidates = (fields || [])
-    .filter((field) => field?.type === "PHONE_NUMBER" || /(?:telephone|mobile|portable)/.test(normalizedFieldLabel(field)))
+    .filter((field) => ["PHONE_NUMBER", "INPUT_PHONE_NUMBER"].includes(field?.type) || /(?:telephone|mobile|portable)/.test(normalizedFieldLabel(field)))
     .map((field) => normalizeFrenchMobile(field.value))
     .filter(Boolean);
   return new Set(candidates).size === 1 ? candidates[0] : null;
 }
 
+function tallyFieldStringValues(field) {
+  const values = Array.isArray(field?.value) ? field.value : [field?.value];
+  const options = new Map((field?.options || []).map((option) => [option?.id, option?.text]));
+  return values
+    .map((value) => options.get(value) || value)
+    .filter((value) => typeof value === "string" && value.trim())
+    .map((value) => value.trim());
+}
+
 function tallyFieldValue(fields, labelPattern) {
   const values = (fields || [])
     .filter((field) => labelPattern.test(normalizedFieldLabel(field)))
-    .flatMap((field) => Array.isArray(field?.value) ? field.value : [field?.value])
-    .filter((value) => typeof value === "string" && value.trim())
-    .map((value) => value.trim());
+    .flatMap(tallyFieldStringValues);
   return new Set(values).size === 1 ? values[0] : null;
 }
 
@@ -485,11 +492,11 @@ function frenchSmsDate(value) {
 }
 
 export function tallySmsContent(fields) {
-  const fullName = safeSmsText(tallyFieldValue(fields, /^(?:prenom|nom|nom et prenom|prenom et nom|nom complet)$/), 50);
+  const fullName = safeSmsText(tallyFieldValue(fields, /^(?:prenom|nom|nom et prenom|prenom et nom|nom complet|votre nom et prenom)$/), 50);
   const name = fullName?.split(/\s+/)[0] || null;
-  const safeEventName = safeSmsText(tallyFieldValue(fields, /^(?:type d'evenement|evenement|type de prestation|nom de l'evenement)$/), 40);
+  const safeEventName = safeSmsText(tallyFieldValue(fields, /^(?:type d'evenement|evenement|type de prestation|nom de l'evenement|quel type d'evenement envisagez-vous\?)$/), 40);
   const eventName = safeEventName ? `${safeEventName[0].toLowerCase()}${safeEventName.slice(1)}` : null;
-  const eventDate = frenchSmsDate(tallyFieldValue(fields, /^(?:date|date de l'evenement|quand)$/));
+  const eventDate = frenchSmsDate(tallyFieldValue(fields, /^(?:date|date de l'evenement|date de votre evenement|quand)$/));
   if (!name || !eventName || !eventDate) return null;
   const content = `Bonjour ${name}, votre ${eventName} du ${eventDate} est bien note. Nous vous repondrons vite. Pour plus d'informations, contactez-nous. Chaleureusement, Belloria`;
   return content.length <= SMS_TEXT_MAX_CHARS ? content : null;
@@ -521,7 +528,11 @@ async function sendTallySms(env, submission) {
       })
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.messageId) throw new Error(`brevo_http_${response.status}`);
+    if (!response.ok || !payload.messageId) {
+      const error = new Error("Brevo rejected the transactional SMS");
+      error.code = `brevo_http_${response.status}`;
+      throw error;
+    }
     await recordSmsResult(env, submission.eventId, "accepted", String(payload.messageId));
     console.log(JSON.stringify({ event: "tally_sms_accepted" }));
   } catch (error) {
