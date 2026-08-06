@@ -487,7 +487,8 @@ function frenchSmsDate(value) {
 export function tallySmsContent(fields) {
   const fullName = safeSmsText(tallyFieldValue(fields, /^(?:prenom|nom|nom et prenom|prenom et nom|nom complet)$/), 50);
   const name = fullName?.split(/\s+/)[0] || null;
-  const eventName = safeSmsText(tallyFieldValue(fields, /^(?:type d'evenement|evenement|type de prestation|nom de l'evenement)$/), 40);
+  const safeEventName = safeSmsText(tallyFieldValue(fields, /^(?:type d'evenement|evenement|type de prestation|nom de l'evenement)$/), 40);
+  const eventName = safeEventName ? `${safeEventName[0].toLowerCase()}${safeEventName.slice(1)}` : null;
   const eventDate = frenchSmsDate(tallyFieldValue(fields, /^(?:date|date de l'evenement|quand)$/));
   if (!name || !eventName || !eventDate) return null;
   const content = `Bonjour ${name}, votre ${eventName} du ${eventDate} est bien note. Offre adaptee a vos informations. Une question ? Contactez-nous. Chaleureusement, Belloria`;
