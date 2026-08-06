@@ -72,9 +72,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   Envoyer après une nouvelle soumission Tally un SMS déterministe, personnalisé uniquement avec les faits structurés du formulaire, sans prix, disponibilité ni contenu inventé. Prévoir information du prospect, validation du numéro, statut de livraison, idempotence et modèle générique en cas d'ambiguïté.
   **Terminé lorsque** un prospect reçoit en quelques secondes un accusé d'un seul segment, qu'un rejeu ne renvoie rien et qu'un échec SMS reste visible sans perdre la demande.
 
-- [ ] **BELL-036 — Notification Telegram immédiate des demandes Tally** (`in_progress`)
+- [x] **BELL-036 — Notification Telegram immédiate des demandes Tally** (`completed`)
   Envoyer sans coût supplémentaire un accusé Telegram dès l'ingestion du webhook, avec D1 comme file anti-perte et le passage horaire comme traitement CRM.
   **Terminé lorsque** une soumission contrôlée est signalée en moins d'une minute, qu'un rejeu ne renvoie pas de seconde notification et que le traitement horaire reste intact.
+  Worker déployé, 22 tests validés et soumission `ArA1Dzk` signalée, synchronisée puis acquittée. Le second acquittement est resté sans effet, la confirmation finale Telegram a été envoyée et la fiche CRM de test retirée.
 
 - [x] **BELL-035 — Intégration du plugin Tally dans ChatGPT Work** (`completed`)
   Utiliser le connecteur Tally pour lire une soumission ciblée, avec le webhook/D1 comme déclencheur, registre anti-perte et repli. Réduire l'exposition du payload D1 par défaut et empêcher toute modification de formulaire depuis la tâche automatisée.
