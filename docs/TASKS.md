@@ -80,9 +80,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   Après validation des déclenchements événementiels, retirer au passage horaire le traitement commercial nominal et réduire progressivement sa fréquence : quatre heures, puis contrôle quotidien selon les mesures. Le conserver pour reprendre les soumissions, analyses, SMS ou commandes bloqués et produire le briefing anti-perte.
   **Terminé lorsque** les demandes nominales sont traitées par événement, que les événements abandonnés sont repris automatiquement et que la baisse de fréquence réduit la consommation sans régression de délai ni perte.
 
-- [ ] **BELL-039 — Pilotage des actions commerciales depuis Telegram** (`pending`)
-  Après analyse, permettre de préparer un email, recommander un appel ou une relance et exécuter uniquement les actions externes explicitement validées dans Telegram. Conserver le destinataire, le contenu approuvé et le résultat dans une trace idempotente.
-  **Terminé lorsque** Belloria peut passer d'une analyse prospect à une action commerciale contrôlée sans envoi ambigu, doublon ni promesse non vérifiée.
+- [ ] **BELL-039 — GPT Belloria, assistant commercial** (`in_progress`)
+  Créer un GPT privé utilisable dans ChatGPT sur téléphone, nourri du contexte commercial Belloria, capable de qualifier un prospect, recommander une action, préparer un email et guider la mise à jour du CRM. Les actions externes restent explicitement confirmées.
+  GPT privé et passerelle d'Actions locale créés ; l'activation Gmail/Notion attend les identifiants OAuth/API dédiés, qui ne sont pas fournis par les plugins ChatGPT personnels.
+  **Terminé lorsque** le GPT applique les offres et règles validées, ne fabrique aucune promesse et peut accompagner une action commerciale contrôlée à partir du contexte fourni, avec les connexions Gmail/Notion activées.
 
 - [ ] **BELL-038 — Analyse ChatGPT Work déclenchée depuis Telegram** (`pending`)
   Déclencher à la demande l'analyse d'une soumission Tally ou d'un prospect depuis Telegram, sans attendre le passage planifié, puis restituer le résultat dans le même canal. Utiliser un identifiant technique et conserver le passage planifié uniquement comme reprise anti-perte.

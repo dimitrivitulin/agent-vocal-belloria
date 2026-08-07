@@ -1,40 +1,41 @@
-# BELL-041 — Clôture SMS Tally : validation réelle et nettoyage
+# BELL-039 — GPT Belloria, assistant commercial
 
-Statut: completed
-Branche: `codex/bell-041-close-sms-validation`
+Statut: in_progress
+Branche: `codex/bell-039-gpt-commercial`
 Dernière mise à jour: 2026-08-08
 
 ## Objectif
 
-Clôturer ensemble BELL-037 et BELL-041 en prouvant le parcours Tally→Worker→Brevo, le rejeu sans doublon et le nettoyage ciblé des données de test.
+Créer un GPT personnalisé accessible dans ChatGPT sur téléphone, avec le contexte commercial Belloria et les règles nécessaires pour qualifier un prospect, recommander une action, préparer un email et guider la mise à jour du CRM.
 
 ## Contexte autorisé
 
-- Domaine : Worker Cloudflare, D1 distant et SMS Brevo.
-- Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `worker/src/index.js`, `worker/test/worker.test.js`, `docs/tally-sms-ack.md`, `wrangler.jsonc`.
-- Skill requis : aucun.
-- MCP requis : aucun ; accès D1 distant en lecture, puis suppression des seules soumissions identifiées comme tests.
-- Hors périmètre : modification des secrets, du modèle SMS, de la configuration Brevo/Tally, des données CRM réelles et des envois commerciaux.
+- Domaine : configuration d’un GPT ChatGPT, Worker Cloudflare, contrat d’actions sécurisé et accès Gmail/Notion.
+- Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `docs/PROJECT_CONTEXT.md`, `worker/src/index.js`, `wrangler.jsonc`, contrat MCP et documentation commerciale/CRM directement référencée.
+- Skill requis : `openai-docs` pour vérifier les capacités et limites actuelles des GPT personnalisés et de leurs actions.
+- MCP requis : Chrome Colibri pour la configuration du GPT ; aucun accès Gmail/Notion réel pendant les tests locaux.
+- Hors périmètre : déclenchement automatique d’un GPT depuis un webhook, envoi automatique d’email client, secrets réels, API OpenAI payante.
 
 ## Périmètre
 
-- Identifier sans ambiguïté les soumissions de test et la soumission actuellement en attente.
-- Vérifier le rejeu contre le même événement sans provoquer un second SMS.
-- Contrôler les statuts Brevo/D1 et retirer uniquement les données de test confirmées.
+- Constituer le contexte et les instructions du GPT Belloria : rôle, ton, offres validées, qualification, CRM, préparation d’email et garde-fous.
+- Créer le GPT privé dans ChatGPT et y charger la base de connaissance adaptée.
+- Préparer le contrat d’actions futur pour la lecture du dernier formulaire et les mutations explicitement confirmées.
+- Exposer des Actions GPT sécurisées permettant la lecture Gmail/Notion et la préparation contrôlée d’une mutation.
 
 ## Critères de réussite
 
-- Le SMS réel est personnalisé, livré et limité à un segment.
-- Un rejeu réel ne génère pas de second SMS.
-- Les soumissions de test sont retirées, sans toucher aux soumissions réelles.
-- Les états BELL-037 et BELL-041 et les preuves utiles sont mis à jour ; les tests Worker et `git diff --check` réussissent.
+- Le GPT répond comme un assistant commercial Belloria, sans inventer de prix, disponibilité ni promesse.
+- Il peut conduire une analyse complète à partir d’informations fournies, proposer une mise à jour CRM et rédiger un email à valider.
+- Le GPT reste privé et exploitable sur téléphone ; les actions externes sont explicitement confirmées.
 
-## Résultat
+## Résultat intermédiaire
 
-Les livraisons contrôlées ont atteint `delivered` dans Brevo et D1. Les neuf soumissions d'essai confirmées (six BELL-041 et trois BELL-037) ont été supprimées de Tally puis de D1 ; les demandes réelles adjacentes ont été conservées.
+- GPT privé `Belloria — Assistant commercial` créé, avec les référentiels commercial, conversion, prospect 360 et CRM chargés ; accès téléphone prêt.
+- Passerelle d'Actions ajoutée et déployée au Worker (version `50dce58f-e0b7-4d09-8221-a49c8c1d65ec`) : recherche Gmail en lecture seule, recherche/lecture Notion, mise à jour Notion avec confirmation explicite et jeton dédié.
+- L'activation réelle attend les identifiants OAuth Gmail et le jeton de connexion Notion, distincts des plugins ChatGPT personnels.
 
 ## Validation
 
-- Tests Worker : 31 réussis le 2026-08-07, dont le rejeu du même webhook sans second appel SMS ; `git diff --check` est valide.
-- Déploiement Cloudflare validé : version `977401bc-8f53-4e7d-ac4d-165e031e22a6` ; `GET /health` retourne `{"status":"ok","channel":"telegram"}`.
-- D1 distant : suppression confirmée de 9 lignes ciblées ; vérification finale `targeted_remaining = 0`.
+- Tests Worker : 34 réussis le 2026-08-08 ; la surface OpenAPI, l'authentification, la lecture Gmail sans envoi et le refus de mutation CRM sans confirmation sont couverts.
+- `git diff --check` est valide.

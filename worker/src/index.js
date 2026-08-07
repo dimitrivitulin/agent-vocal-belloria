@@ -1,3 +1,5 @@
+import { gptActions } from "./gpt-actions.js";
+
 const TELEGRAM_VOICE_MAX_BYTES = 5 * 1024 * 1024;
 const TELEGRAM_TEXT_MAX_CHARS = 4096;
 const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo";
@@ -834,6 +836,7 @@ async function mcp(request, env) {
 
 export async function handleRequest(request, env, context) {
   const path = new URL(request.url).pathname;
+  if (path.startsWith("/gpt-actions/")) return gptActions(request, env);
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
   if (path === "/webhooks/tally") return tallyWebhook(request, env, context);
@@ -845,7 +848,7 @@ export function createWorkerEntrypoint(oauthProvider) {
   return {
     fetch(request, env, context) {
       const path = new URL(request.url).pathname;
-      if (path === "/health" || path === "/webhooks/telegram" || path === "/webhooks/tally" || path === "/webhooks/brevo-sms") {
+      if (path.startsWith("/gpt-actions/") || path === "/health" || path === "/webhooks/telegram" || path === "/webhooks/tally" || path === "/webhooks/brevo-sms") {
         return handleRequest(request, env, context);
       }
       return oauthProvider.fetch(request, env, context);
