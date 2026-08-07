@@ -36,6 +36,14 @@ class FakeDb {
     }
 
     if (sql.startsWith("UPDATE tally_submissions SET sms_status")) {
+      if (sql.includes("OR (event_id")) {
+        const [sms_status, messageId, sms_error_code, providerMessageId, eventId] = args;
+        const row = [...this.tally.values()].find((item) => item.sms_provider_id === providerMessageId)
+          || (this.tally.get(eventId)?.sms_status === "pending" ? this.tally.get(eventId) : null);
+        if (!row) return { meta: { changes: 0 } };
+        Object.assign(row, { sms_status, sms_provider_id: row.sms_provider_id || messageId, sms_error_code, sms_updated_at: new Date().toISOString() });
+        return { meta: { changes: 1 } };
+      }
       if (sql.includes("WHERE sms_provider_id")) {
         const [sms_status, sms_error_code, messageId] = args;
         const row = [...this.tally.values()].find((item) => item.sms_provider_id === messageId);
@@ -444,6 +452,7 @@ test("sends one transactional SMS for a new Tally event and records the provider
       recipient: "33612345678",
       content: "Bonjour Camille, votre mariage du 3 octobre 2026 est bien note. Nous vous repondrons vite. Pour plus d'informations, contactez-nous. Chaleureusement, Belloria",
       type: "transactional",
+      tag: "event-1",
       unicodeEnabled: false
     }]);
     assert.equal(env.DB.tally.get("event-1").sms_status, "accepted");
@@ -479,6 +488,19 @@ test("authenticates Brevo delivery callbacks and updates the matching SMS only",
   assert.equal(env.DB.tally.get("event-1").sms_status, "delivered");
   assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 999, msg_status: "hard_bounce", to: "33600000000" }), env)).json(), { accepted: 0 });
   assert.equal(JSON.stringify(env.DB.tally.get("event-1")).includes("33600000000"), false);
+});
+
+test("matches an early Brevo callback through the Tally event tag", async () => {
+  const env = environment({ BREVO_WEBHOOK_TOKEN: "brevo-webhook-token" });
+  env.DB.tally.set("event-1", { event_id: "event-1", state: "pending", sms_status: "pending", sms_provider_id: null });
+
+  assert.deepEqual(await (await handleRequest(brevoWebhook({
+    messageId: 1511882900176220,
+    msg_status: "delivered",
+    tag: ["event-1"]
+  }), env)).json(), { accepted: 1 });
+  assert.equal(env.DB.tally.get("event-1").sms_status, "delivered");
+  assert.equal(env.DB.tally.get("event-1").sms_provider_id, "1511882900176220");
 });
 
 test("keeps the Tally request pending when SMS cannot be sent", async () => {

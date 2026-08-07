@@ -56,10 +56,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
-- [ ] **BELL-041 — Déploiement et validation réelle du SMS Tally** (`blocked`)
+- [ ] **BELL-041 — Déploiement et validation réelle du SMS Tally** (`ready_for_review`)
   Déployer en production le modèle SMS chaleureux préparé dans BELL-037, puis réaliser une soumission Tally contrôlée vers un numéro Belloria. Vérifier les valeurs `{prenom}`, `{evenement}` et `{date}`, la livraison Brevo, le coût d'un seul segment, le callback D1 et l'absence de second SMS au rejeu.
   **Terminé lorsque** le parcours Tally→Worker→Brevo est validé de bout en bout avec un SMS reçu conforme, un état `delivered`, aucun doublon et aucune donnée ou clé de test résiduelle.
-  **Bloqué** : le parsing du payload réel et l'observabilité HTTP Brevo sont corrigés et déployés, mais le compte Brevo affiche 0 crédit SMS prépayé. Une dernière validation et le nettoyage des trois soumissions contrôlées restent à faire après recharge.
+  **Prêt pour revue** : deux SMS contrôlés sont `Délivré` dans Brevo et D1 atteint `delivered`. La clé API et le secret webhook ont été renouvelés ; la course entre callback et persistance du `messageId` est corrigée par un tag Tally. Restent le rejeu idempotent et le nettoyage destructif des six soumissions de test après confirmation.
 
 - [ ] **BELL-040 — Réduction du passage planifié Work** (`pending`)
   Après validation des déclenchements événementiels, retirer au passage horaire le traitement commercial nominal et réduire progressivement sa fréquence : quatre heures, puis contrôle quotidien selon les mesures. Le conserver pour reprendre les soumissions, analyses, SMS ou commandes bloqués et produire le briefing anti-perte.

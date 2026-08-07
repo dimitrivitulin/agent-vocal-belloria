@@ -524,6 +524,7 @@ async function sendTallySms(env, submission) {
         recipient,
         content,
         type: "transactional",
+        tag: submission.eventId,
         unicodeEnabled: false
       })
     });
@@ -549,14 +550,29 @@ async function brevoSmsWebhook(request, env) {
   try { payload = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
   const messageId = String(payload?.messageId || "");
   const providerStatus = String(payload?.msg_status || "").toLowerCase();
-  if (!messageId || !providerStatus) return json({ error: "invalid event" }, 400);
+  if (!messageId || !providerStatus) {
+    const nested = payload && typeof payload.data === "object" && payload.data ? payload.data : null;
+    const shape = {
+      event: "brevo_sms_invalid_event",
+      root_keys: payload && typeof payload === "object" ? Object.keys(payload).sort() : [],
+      data_keys: nested ? Object.keys(nested).sort() : []
+    };
+    console.log(JSON.stringify(shape));
+    return json({ error: "invalid event" }, 400);
+  }
+  const tags = Array.isArray(payload.tag) ? payload.tag : [payload.tag];
+  const eventId = tags.map((value) => String(value || "")).find((value) => value && value.length <= 128) || "";
   const status = providerStatus === "delivered" ? "delivered"
     : ["soft_bounce", "hard_bounce", "rejected", "blocked", "skip", "blacklisted"].includes(providerStatus) ? "failed"
       : "accepted";
   const errorCode = status === "failed" ? `brevo_${providerStatus}` : null;
-  const result = await env.DB.prepare(
-    "UPDATE tally_submissions SET sms_status = ?, sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sms_provider_id = ?"
-  ).bind(status, errorCode, messageId).run();
+  const result = eventId
+    ? await env.DB.prepare(
+      "UPDATE tally_submissions SET sms_status = ?, sms_provider_id = COALESCE(sms_provider_id, ?), sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sms_provider_id = ? OR (event_id = ? AND sms_status = 'pending')"
+    ).bind(status, messageId, errorCode, messageId, eventId).run()
+    : await env.DB.prepare(
+      "UPDATE tally_submissions SET sms_status = ?, sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sms_provider_id = ?"
+    ).bind(status, errorCode, messageId).run();
   console.log(JSON.stringify({ event: "tally_sms_status", status, matched: Number(result.meta?.changes || 0) }));
   return json({ accepted: Number(result.meta?.changes || 0) > 0 ? 1 : 0 });
 }

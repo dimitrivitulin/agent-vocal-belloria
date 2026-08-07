@@ -21,6 +21,7 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 ## Architecture retenue à ce stade
 
 - Tally envoie directement chaque nouveau formulaire au Worker Cloudflare par webhook signé ; D1 conserve la file anti-perte jusqu'au succès CRM.
+- Le Worker envoie l'accusé SMS transactionnel Brevo dans un seul segment et transmet l'identifiant Tally comme tag afin de rattacher les callbacks précoces sans course réseau.
 - Gmail applique des filtres et labels aux autres messages candidats.
 - Une tâche ChatGPT Work cloud consulte périodiquement les éléments à traiter.
 - Notion constitue la source de vérité du CRM métier.

@@ -1,6 +1,6 @@
 # BELL-041 — Déploiement et validation réelle du SMS Tally
 
-Statut: blocked
+Statut: ready_for_review
 Branche: `codex/bell-041-sms-tally-validation`
 Dernière mise à jour: 2026-08-06
 
@@ -28,8 +28,10 @@ Le déploiement et les contrôles distants non communicants sont dans le lot. La
 
 ## Résultat au 2026-08-06
 
-Le Worker résout désormais les identifiants d'options Tally vers leur texte et reconnaît les types réels `INPUT_DATE` / `INPUT_PHONE_NUMBER`. Trois soumissions contrôlées n'ont envoyé aucun SMS : deux ont révélé puis validé le correctif de parsing ; la troisième a atteint Brevo mais a été refusée car le compte affiche 0 crédit prépayé. Le Worker déployé trace maintenant le statut HTTP Brevo assaini ; 28 tests Worker et 78 tests Python passent.
+Brevo dispose de crédits, d'une clé API valide et d'un webhook authentifié par un secret dédié. Deux SMS contrôlés vers le numéro Belloria sont marqués `Délivré` dans les logs Brevo ; le dernier utilise les valeurs Cyndy / anniversaire / 16 mars 2027 et D1 est réconcilié à `delivered`.
 
-## Blocage et reprise
+Le Worker résout les libellés Tally réels, trace les erreurs HTTP assainies et ajoute désormais l'identifiant Tally comme `tag` Brevo. Le callback peut ainsi rattacher un statut reçu avant l'enregistrement du `messageId`, sans être perdu par cette course réseau. La version `fc395a4c-abc9-4f6c-b468-e7d050afb528` est déployée et 29 tests Worker passent.
 
-Acheter des crédits SMS Brevo, puis effectuer une dernière soumission contrôlée après confirmation explicite. Vérifier `accepted` puis `delivered`, le segment unique et le rejeu idempotent, avant de supprimer les trois soumissions de test Tally/D1/CRM et de terminer le lot.
+## Reprise
+
+Après confirmation destructive, rejouer une soumission pour confirmer l'absence de second SMS, puis supprimer les six soumissions contrôlées de Tally, D1 et du CRM. Finaliser ensuite les validations, le commit et le push.
