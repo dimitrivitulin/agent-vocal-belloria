@@ -91,7 +91,7 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 - [ ] **BELL-037 — Accusé SMS transactionnel immédiat** (`in_progress`)
   Envoyer après une nouvelle soumission Tally un SMS déterministe, personnalisé uniquement avec les faits structurés du formulaire, sans prix, disponibilité ni contenu inventé. Prévoir information du prospect, validation du numéro, statut de livraison, idempotence et modèle générique en cas d'ambiguïté.
   **Terminé lorsque** un prospect reçoit en quelques secondes un accusé d'un seul segment, qu'un rejeu ne renvoie rien et qu'un échec SMS reste visible sans perdre la demande.
-  **En cours** : le modèle court `{prenom}` / `{evenement}` / `{date}` est mis à jour pour limiter le coût à un segment GSM-7. Il attend sa validation locale puis son déploiement et une soumission Tally contrôlée de bout en bout.
+  **Prêt pour revue** : le modèle court `{prenom}` / `{evenement}` / `{date}` est déployé dans la version Worker `977401bc-8f53-4e7d-ac4d-165e031e22a6`, sans modification des secrets. Reste une soumission Tally contrôlée de bout en bout vers un numéro Belloria.
 
 - [x] **BELL-036 — Notification Telegram immédiate des demandes Tally** (`completed`)
   Envoyer sans coût supplémentaire un accusé Telegram dès l'ingestion du webhook, avec D1 comme file anti-perte et le passage horaire comme traitement CRM.
