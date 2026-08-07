@@ -1,6 +1,6 @@
 # BELL-043 — Détails Tally dans Telegram
 
-Statut: ready_for_review
+Statut: completed
 Branche: `codex/bell-043-details-tally-telegram`
 Dernière mise à jour: 2026-08-07
 
@@ -34,7 +34,8 @@ Envoyer immédiatement dans le chat Telegram privé un résumé exploitable de c
 
 - Les 30 tests Worker passent, dont le résumé Telegram et le rejeu idempotent.
 - Version Cloudflare `43590b58-fa74-48a9-ae76-e096466fae05` déployée ; `/health` répond `ok`.
+- La soumission Tally réelle de Dimitri a confirmé le rendu Telegram ; son email a été placé dans la corbeille et aucune ligne n'est en attente dans D1 ni présente dans le CRM Notion.
 
 ## Reprise
 
-Réaliser une soumission Tally contrôlée et vérifier le contenu reçu dans Telegram avant de marquer le lot terminé.
+Lot terminé.

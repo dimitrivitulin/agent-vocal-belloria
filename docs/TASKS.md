@@ -56,10 +56,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
-- [ ] **BELL-043 — Détails Tally dans Telegram** (`ready_for_review`)
+- [x] **BELL-043 — Détails Tally dans Telegram** (`completed`)
   Remplacer l'accusé Telegram générique par un résumé immédiat des champs métier du formulaire Tally, sans coordonnées du prospect et sans doublon au rejeu.
   **Terminé lorsque** une soumission contrôlée affiche dans le chat privé les détails non sensibles attendus, une seule fois.
-  **Prêt pour revue** : Worker déployé (version `43590b58-fa74-48a9-ae76-e096466fae05`), résumé et masquage des coordonnées validés par 30 tests ; une soumission Tally réelle reste à vérifier.
+  Worker déployé (version `43590b58-fa74-48a9-ae76-e096466fae05`), résumé et masquage des coordonnées validés par 30 tests et une soumission réelle ; l'email de test a été placé dans la corbeille, sans ligne correspondante dans Notion ou D1.
 
 - [x] **BELL-042 — Chargement du contexte à la demande** (`completed`)
   Formaliser dans les règles du dépôt un manifeste par lot, un skill initial au maximum et des MCP ou connecteurs utilisés uniquement lorsqu'une dépendance concrète l'exige.
