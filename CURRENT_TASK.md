@@ -1,37 +1,35 @@
-# BELL-041 — Déploiement et validation réelle du SMS Tally
+# BELL-042 — Chargement du contexte à la demande
 
-Statut: ready_for_review
-Branche: `codex/bell-041-sms-tally-validation`
-Dernière mise à jour: 2026-08-06
+Statut: completed
+Branche: `codex/bell-042-contexte-a-la-demande`
+Dernière mise à jour: 2026-08-07
 
 ## Objectif
 
-Déployer le modèle SMS chaleureux de BELL-037 et valider le parcours Tally→Worker→Brevo sur un numéro appartenant à Belloria.
+Formaliser une méthode qui limite chaque tâche Codex aux fichiers, skills et MCP réellement nécessaires à sa feature.
+
+## Contexte autorisé
+
+- Domaine : règles de travail et gestion du contexte Codex.
+- Fichiers initiaux : `AGENTS.md`, `CURRENT_TASK.md`, `docs/TASKS.md`.
+- Skill requis : aucun pour l'implémentation locale.
+- MCP requis : aucun.
+- Hors périmètre : code applicatif, services externes et configuration globale Codex.
 
 ## Périmètre
 
-- Valider localement le Worker, la migration et le modèle d'un segment.
-- Contrôler la configuration distante sans exposer de secret, appliquer la migration et déployer le Worker.
-- Après confirmation explicite, effectuer une soumission Tally contrôlée vers un numéro Belloria.
-- Vérifier la personnalisation, la livraison, le callback D1, l'idempotence au rejeu et nettoyer les données de test.
+- Ajouter à `AGENTS.md` une politique de chargement progressif et une matrice de déclenchement par domaine.
+- Rendre obligatoire un manifeste de contexte dans `CURRENT_TASK.md`.
+- Conserver le contexte initial minimal déjà défini et éviter tout connecteur « au cas où ».
+- Inscrire le lot dans la feuille de route sans modifier le lot SMS BELL-041.
 
 ## Critères de réussite
 
-- Le SMS reçu contient les bonnes valeurs `{prenom}`, `{evenement}` et `{date}` dans un seul segment.
-- D1 atteint `delivered`, la soumission reste disponible pour le flux CRM et le rejeu ne renvoie aucun SMS.
-- Aucun secret, numéro, payload ou artefact de test ne subsiste dans Git ou les services après validation.
-- Tests, `git diff --check`, examen du diff, commit et publication de la branche réussissent.
-
-## Autorisation externe
-
-Le déploiement et les contrôles distants non communicants sont dans le lot. La soumission Tally et le SMS réel exigent une confirmation explicite juste avant l'envoi.
-
-## Résultat au 2026-08-06
-
-Brevo dispose de crédits, d'une clé API valide et d'un webhook authentifié par un secret dédié. Deux SMS contrôlés vers le numéro Belloria sont marqués `Délivré` dans les logs Brevo ; le dernier utilise les valeurs Cyndy / anniversaire / 16 mars 2027 et D1 est réconcilié à `delivered`.
-
-Le Worker résout les libellés Tally réels, trace les erreurs HTTP assainies et ajoute désormais l'identifiant Tally comme `tag` Brevo. Le callback peut ainsi rattacher un statut reçu avant l'enregistrement du `messageId`, sans être perdu par cette course réseau. La version `fc395a4c-abc9-4f6c-b468-e7d050afb528` est déployée et 29 tests Worker passent.
+- Les règles indiquent quoi charger, quand déclencher un skill ou MCP et quand créer une nouvelle tâche.
+- Le lot actif déclare fichiers, skills, MCP et hors-périmètre.
+- `CURRENT_TASK.md` reste sous 100 lignes.
+- Le diff est documentaire, ciblé et passe `git diff --check`.
 
 ## Reprise
 
-Après confirmation destructive, rejouer une soumission pour confirmer l'absence de second SMS, puis supprimer les six soumissions contrôlées de Tally, D1 et du CRM. Finaliser ensuite les validations, le commit et le push.
+Pour tout nouveau lot, remplir `Contexte autorisé` avant de charger une ressource spécialisée ; reprendre BELL-041 dans sa tâche dédiée si la validation SMS est poursuivie.

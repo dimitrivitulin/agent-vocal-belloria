@@ -56,6 +56,11 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [x] **BELL-042 — Chargement du contexte à la demande** (`completed`)
+  Formaliser dans les règles du dépôt un manifeste par lot, un skill initial au maximum et des MCP ou connecteurs utilisés uniquement lorsqu'une dépendance concrète l'exige.
+  **Terminé lorsque** chaque tâche commence avec le contexte local minimal, déclare ses fichiers, skills, MCP et hors-périmètre, puis charge progressivement les ressources selon une matrice de déclenchement explicite.
+  Politique, matrice de déclenchement et manifeste `Contexte autorisé` ajoutés ; aucun code applicatif, service externe ou paramètre global Codex n'a été modifié.
+
 - [ ] **BELL-041 — Déploiement et validation réelle du SMS Tally** (`ready_for_review`)
   Déployer en production le modèle SMS chaleureux préparé dans BELL-037, puis réaliser une soumission Tally contrôlée vers un numéro Belloria. Vérifier les valeurs `{prenom}`, `{evenement}` et `{date}`, la livraison Brevo, le coût d'un seul segment, le callback D1 et l'absence de second SMS au rejeu.
   **Terminé lorsque** le parcours Tally→Worker→Brevo est validé de bout en bout avec un SMS reçu conforme, un état `delivered`, aucun doublon et aucune donnée ou clé de test résiduelle.

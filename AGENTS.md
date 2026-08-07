@@ -20,6 +20,41 @@ Consulter dans cet ordre :
 
 Lire ensuite uniquement les dépendances, configurations, tests ou décisions nécessaires au lot. Ne pas charger automatiquement tout le dépôt, tous les journaux ou toutes les décisions historiques.
 
+## Chargement à la demande
+
+Avant toute lecture supplémentaire ou activation d'un outil spécialisé, classifier la demande par domaine et déclarer dans `CURRENT_TASK.md` :
+
+- les fichiers initiaux autorisés ;
+- le ou les skills nécessaires, avec un seul skill initial par défaut ;
+- les MCP ou connecteurs nécessaires ;
+- les éléments explicitement hors périmètre.
+
+Appliquer ensuite ces règles :
+
+- Commencer sans skill spécialisé lorsque la tâche peut être traitée avec le dépôt et les outils locaux.
+- Charger un skill uniquement lorsque la demande correspond à son domaine ou que l'utilisateur le nomme ; n'en ajouter un second que si une dépendance concrète traverse réellement deux domaines.
+- Ne jamais consulter un connecteur externe « au cas où ». Gmail, Notion, GitHub, navigateur, Supabase et les autres MCP ne sont utilisés que si le manifeste du lot ou la demande active les exige.
+- Préférer des MCP désactivés par défaut dans la configuration Codex et les activer pour une tâche dédiée. Lorsqu'un outil est déjà exposé par l'environnement, ne pas l'appeler sans nécessité.
+- Utiliser `rg` pour cibler les fichiers et symboles pertinents avant de lire un fichier complet ; partir des dépendances directes, tests associés et configurations proches.
+- Résumer les sorties volumineuses et ne conserver dans les fichiers de suivi que le résultat utile, jamais les journaux complets.
+- Ouvrir une nouvelle tâche Codex lorsqu'une feature indépendante nécessiterait un autre domaine, un autre skill ou un autre ensemble de MCP.
+
+Matrice de déclenchement par défaut :
+
+| Domaine de la demande | Contexte ou outil supplémentaire autorisé |
+| --- | --- |
+| Code local | Fichiers concernés, dépendances directes et tests associés |
+| Supabase ou Postgres | Skill Supabase approprié, schéma et migrations concernés |
+| GitHub, PR ou CI | Plugin GitHub approprié uniquement |
+| Email | Gmail uniquement |
+| Documentation métier | Notion uniquement |
+| API OpenAI ou Codex | Documentation OpenAI uniquement |
+| PDF, présentation ou tableur | Skill documentaire correspondant uniquement |
+| Information actuelle ou page distante | Recherche web ou navigateur, seulement si nécessaire |
+| Création ou modification d'image | ImageGen uniquement |
+
+Si la demande ne correspond à aucune ligne, rester sur le contexte local minimal jusqu'à ce qu'une dépendance soit démontrée.
+
 ## Gestion du contexte
 
 - `docs/PROJECT_CONTEXT.md` décrit uniquement l'état stable du système.
