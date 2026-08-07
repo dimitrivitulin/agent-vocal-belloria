@@ -1,39 +1,38 @@
-# BELL-044 — Groupe de notifications Telegram
+# BELL-037 — Accusé SMS transactionnel immédiat
 
-Statut: completed
-Branche: `codex/bell-044-telegram-groupe-notifications`
+Statut: in_progress
+Branche: `codex/bell-037-sms-brevo-message`
 Dernière mise à jour: 2026-08-07
 
 ## Objectif
 
-Publier les résumés Tally dans un groupe Telegram interne, sans ouvrir les commandes commerciales aux membres du groupe.
+Remplacer le texte de l'accusé SMS Brevo par le message validé, personnalisé avec le nom, le type et la date d'événement du formulaire Tally, tout en restant sur un seul segment GSM-7.
 
 ## Contexte autorisé
 
-- Domaine : code local Worker Cloudflare et notification Telegram.
-- Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `worker/src/index.js`, `worker/test/worker.test.js`, `.dev.vars.example`, `docs/telegram-cloudflare.md`.
+- Domaine : code local Worker Cloudflare et SMS Brevo.
+- Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `worker/src/index.js`, `worker/test/worker.test.js`, `docs/tally-sms-ack.md`.
 - Skill requis : aucun.
 - MCP requis : aucun.
-- Hors périmètre : secrets, déploiement, ajout de membres Telegram, ChatGPT Work, Tally, Notion et Brevo.
+- Hors périmètre : secrets, déploiement, envoi de test, configuration Brevo, Tally, Notion et Telegram.
 
 ## Périmètre
 
-- Ajouter un destinataire de notification de groupe facultatif, distinct du chat privé autorisé.
-- Conserver le chat privé comme unique source de commandes et de confirmations.
-- Documenter la configuration manuelle et couvrir le routage par un test.
+- Utiliser le prénom issu du nom, le type et la date d'événement fournis par Tally.
+- Adopter le texte court validé et une signature Belloria.
+- Conserver les garde-fous : ASCII/GSM-7, 160 caractères maximum et refus si les données sont absentes ou ambiguës.
 
 ## Critères de réussite
 
-- Une notification Tally utilise le groupe si son identifiant est configuré, sinon le chat privé existant.
-- Un message de groupe ne peut pas créer de commande.
+- Le SMS reçu est personnalisé avec le nom, l'événement et la date du formulaire.
+- Il reste compatible GSM-7 et tient en un segment.
 - Les tests Worker et `git diff --check` réussissent.
 
 ## Reprise
 
-Lot terminé : le groupe est configuré comme destinataire des notifications Tally et le webhook Telegram est rétabli.
+Modèle, documentation et tests locaux mis à jour ; aucun déploiement ni envoi réel n'a été effectué.
 
 ## Validation
 
-- Les 31 tests Worker et `git diff --check` passent.
-- Le secret Cloudflare du groupe est configuré sans être ajouté au dépôt.
-- Worker déployé : version `a935c766-cf0e-463b-92d8-aea17daee302` ; webhook réenregistré après la lecture de l'identifiant du groupe.
+- Les 31 tests Worker passent et `git diff --check` est valide.
+- La partie Python de `npm test` n'a pas démarré : l'interpréteur Python est absent du terminal ; elle ne couvre pas le Worker SMS.

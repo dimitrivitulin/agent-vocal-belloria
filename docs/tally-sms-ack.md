@@ -6,7 +6,7 @@ Une nouvelle soumission Tally persistée dans D1 déclenche en arrière-plan un 
 
 Le numéro doit être un mobile français `06` ou `07`, accepté en format national ou `+33`. Plusieurs numéros valides différents, un fixe ou un numéro étranger entraînent `skipped`. Le Worker ne duplique pas le numéro dans les colonnes de suivi.
 
-Modèle à trous : `Bonjour {prenom}, votre {evenement} du {date} est bien note. Nous vous repondrons vite. Pour plus d'informations, contactez-nous. Chaleureusement, Belloria` Le prénom est dérivé d'un nom structuré non ambigu ; l'événement et la date proviennent exclusivement des champs Tally. Si une valeur manque, est ambiguë ou rend le texte trop long, aucun SMS n'est envoyé et D1 indique `missing_or_invalid_sms_personalization`. Le texte reste ASCII, sous 160 caractères, sans prix ni promesse de disponibilité.
+Modèle à trous : `Bonjour {prenom}, merci pour votre demande. Votre {evenement} du {date} est enregistre. Nous vous recontacterons rapidement. Cyndy & Dimitri, Belloria` Le prénom est dérivé d'un nom structuré non ambigu ; l'événement et la date proviennent exclusivement des champs Tally. Si une valeur manque, est ambiguë ou rend le texte trop long, aucun SMS n'est envoyé et D1 indique `missing_or_invalid_sms_personalization`. Le texte reste ASCII, sous 160 caractères, sans prix ni promesse de disponibilité.
 
 Pour les champs `MULTIPLE_CHOICE`, Tally transmet les identifiants sélectionnés dans `value` et les libellés dans `options`. Le Worker résout ces identifiants avant de construire le SMS ; un identifiant absent ou ambigu n'est jamais utilisé comme texte client.
 
