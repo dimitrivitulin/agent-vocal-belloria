@@ -1,4 +1,5 @@
 TELEGRAM_BOT_TOKEN=change-me-use-the-token-issued-by-botfather
 TELEGRAM_WEBHOOK_SECRET=change-me-use-a-long-random-value
 TELEGRAM_ALLOWED_CHAT_ID=change-me-use-the-private-belloria-chat-id
+TELEGRAM_NOTIFICATION_CHAT_ID=optional-use-the-telegram-group-chat-id-for-tally-notifications
 BELLORIA_MCP_TOKEN=change-me-use-a-different-long-random-value

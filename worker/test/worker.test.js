@@ -441,6 +441,23 @@ test("acknowledges a newly persisted Tally submission on Telegram only once", as
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test("sends Tally notifications to the configured group without changing the private command chat", async () => {
+  const originalFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, init) => {
+    sent.push(JSON.parse(init.body));
+    return Response.json({ ok: true, result: { message_id: 99 } });
+  };
+  try {
+    const env = environment({ TELEGRAM_NOTIFICATION_CHAT_ID: "-1001234567890" });
+    const context = executionContext();
+    await handleRequest(await tallyRequest(tallyEvent()), env, context);
+    await context.drain();
+    assert.equal(sent[0].chat_id, "-1001234567890");
+    assert.equal(env.TELEGRAM_ALLOWED_CHAT_ID, "123456");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("sends one transactional SMS for a new Tally event and records the provider result", async () => {
   const originalFetch = globalThis.fetch;
   const smsCalls = [];

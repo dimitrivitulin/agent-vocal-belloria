@@ -605,7 +605,7 @@ async function brevoSmsWebhook(request, env) {
 
 async function notifyTallyIngestion(env, submission) {
   try {
-    await sendText(env, tallyTelegramContent(submission));
+    await sendTextToChat(env, tallyTelegramContent(submission), env.TELEGRAM_NOTIFICATION_CHAT_ID || env.TELEGRAM_ALLOWED_CHAT_ID);
     console.log(JSON.stringify({ event: "tally_telegram_ack_sent" }));
   } catch (error) {
     console.log(JSON.stringify({ event: "tally_telegram_ack_failed", code: cleanErrorCode(error, "telegram_ack_failed") }));
@@ -773,9 +773,13 @@ async function consumeApprovedAction(env, confirmationCommandId) {
 }
 
 async function sendText(env, text) {
-  if (!env.TELEGRAM_ALLOWED_CHAT_ID) throw new Error("Telegram chat is not configured");
+  return sendTextToChat(env, text, env.TELEGRAM_ALLOWED_CHAT_ID);
+}
+
+async function sendTextToChat(env, text, chatId) {
+  if (!chatId) throw new Error("Telegram chat is not configured");
   if (!text || text.length > TELEGRAM_TEXT_MAX_CHARS) throw new Error(`text must contain 1 to ${TELEGRAM_TEXT_MAX_CHARS} characters`);
-  const result = await telegramApi(env, "sendMessage", { chat_id: env.TELEGRAM_ALLOWED_CHAT_ID, text });
+  const result = await telegramApi(env, "sendMessage", { chat_id: chatId, text });
   return { sent: true, message_id: result?.message_id };
 }
 

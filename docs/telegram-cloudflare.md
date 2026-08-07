@@ -22,7 +22,8 @@ Copier `.dev.vars.example` vers `.dev.vars` et remplacer les quatre valeurs. `.d
 
 - `TELEGRAM_BOT_TOKEN` : jeton remis par `@BotFather`.
 - `TELEGRAM_WEBHOOK_SECRET` : valeur aléatoire longue, limitée aux lettres, chiffres, `_` et `-` pour respecter le contrat Telegram.
-- `TELEGRAM_ALLOWED_CHAT_ID` : identifiant du chat privé Belloria.
+- `TELEGRAM_ALLOWED_CHAT_ID` : identifiant du chat privé Belloria ; il reste le seul chat capable d'envoyer des commandes au Worker.
+- `TELEGRAM_NOTIFICATION_CHAT_ID` : identifiant facultatif d'un groupe Telegram interne. Lorsqu'il est défini, les notifications Tally y sont publiées ; les confirmations et commandes restent dans le chat privé.
 - `BELLORIA_MCP_TOKEN` : jeton distinct protégeant le MCP.
 
 ## Activation du bot de test
@@ -38,6 +39,17 @@ Copier `.dev.vars.example` vers `.dev.vars` et remplacer les quatre valeurs. `.d
 Cette procédure a été validée de bout en bout le 2026-08-04 : texte idempotent, deux transcriptions vocales, quarantaine d'un vocal vide, suppression des références audio et nettoyage des commandes terminées.
 
 Le script de préparation ne journalise jamais le jeton, les messages ou les noms de compte. Les commandes Wrangler chiffrent les secrets côté Cloudflare ; leur valeur n'est pas placée dans `wrangler.jsonc`.
+
+## Groupe de notifications interne
+
+Pour que plusieurs personnes reçoivent chaque nouvelle demande sans leur donner accès aux commandes commerciales :
+
+1. Créer un groupe Telegram et y ajouter les collaborateurs, puis y ajouter le bot.
+2. Relever l'identifiant du groupe (il commence normalement par `-100`). Avec le webhook déjà actif, `npm run telegram:chats` renvoie volontairement une erreur Telegram 409 ; utiliser un bot Telegram d'identification ajouté temporairement au groupe, ou planifier une brève suspension du webhook avant d'utiliser ce script.
+3. Ajouter cet identifiant comme secret `TELEGRAM_NOTIFICATION_CHAT_ID`, puis déployer le Worker. Ne remplacez pas `TELEGRAM_ALLOWED_CHAT_ID` : il protège le chat privé de pilotage.
+4. Déclencher une soumission Tally de test : le résumé non sensible doit apparaître une seule fois dans le groupe.
+
+Les membres du groupe voient les notifications, mais leurs messages ne deviennent pas des commandes du bot. Éviter d'y inviter des prospects : les résumés y restent visibles pour tous les membres.
 
 ## Vérifications fonctionnelles
 

@@ -56,6 +56,11 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [x] **BELL-044 — Groupe de notifications Telegram** (`completed`)
+  Publier les résumés Tally dans un groupe Telegram interne facultatif tout en conservant le chat privé comme unique origine des commandes et confirmations.
+  **Terminé lorsque** les membres du groupe reçoivent la notification Tally, sans que leurs messages puissent déclencher une commande du bot.
+  Secret de groupe configuré dans Cloudflare, Worker déployé (version `a935c766-cf0e-463b-92d8-aea17daee302`) et webhook rétabli ; les 31 tests Worker valident le routage sans ouvrir les commandes au groupe.
+
 - [x] **BELL-043 — Détails Tally dans Telegram** (`completed`)
   Remplacer l'accusé Telegram générique par un résumé immédiat des champs métier du formulaire Tally, sans coordonnées du prospect et sans doublon au rejeu.
   **Terminé lorsque** une soumission contrôlée affiche dans le chat privé les détails non sensibles attendus, une seule fois.

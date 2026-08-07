@@ -1,41 +1,39 @@
-# BELL-043 — Détails Tally dans Telegram
+# BELL-044 — Groupe de notifications Telegram
 
 Statut: completed
-Branche: `codex/bell-043-details-tally-telegram`
+Branche: `codex/bell-044-telegram-groupe-notifications`
 Dernière mise à jour: 2026-08-07
 
 ## Objectif
 
-Envoyer immédiatement dans le chat Telegram privé un résumé exploitable de chaque nouveau formulaire Tally.
+Publier les résumés Tally dans un groupe Telegram interne, sans ouvrir les commandes commerciales aux membres du groupe.
 
 ## Contexte autorisé
 
 - Domaine : code local Worker Cloudflare et notification Telegram.
-- Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `worker/src/index.js`, `worker/test/worker.test.js`, `docs/chatgpt-work-automation.md`.
-- Skill requis : aucun pour l'implémentation locale.
+- Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `worker/src/index.js`, `worker/test/worker.test.js`, `.dev.vars.example`, `docs/telegram-cloudflare.md`.
+- Skill requis : aucun.
 - MCP requis : aucun.
-- Hors périmètre : ChatGPT Work, Tally, Notion, Brevo, secrets et données de production.
+- Hors périmètre : secrets, déploiement, ajout de membres Telegram, ChatGPT Work, Tally, Notion et Brevo.
 
 ## Périmètre
 
-- Remplacer l'accusé Telegram générique par un résumé des champs structurés du formulaire.
-- Exclure téléphone, email et toute valeur non prévue ou ambiguë.
-- Préserver l'idempotence : une soumission ne produit qu'un seul message.
-- Ajouter les tests et la documentation nécessaires.
+- Ajouter un destinataire de notification de groupe facultatif, distinct du chat privé autorisé.
+- Conserver le chat privé comme unique source de commandes et de confirmations.
+- Documenter la configuration manuelle et couvrir le routage par un test.
 
 ## Critères de réussite
 
-- Le message contient les détails métier reconnus disponibles, avec un rendu lisible.
-- Les coordonnées personnelles ne sont jamais incluses.
-- Le rejeu ne produit aucun second message.
-- Les tests du Worker et `git diff --check` réussissent.
-
-## Validation
-
-- Les 30 tests Worker passent, dont le résumé Telegram et le rejeu idempotent.
-- Version Cloudflare `43590b58-fa74-48a9-ae76-e096466fae05` déployée ; `/health` répond `ok`.
-- La soumission Tally réelle de Dimitri a confirmé le rendu Telegram ; son email a été placé dans la corbeille et aucune ligne n'est en attente dans D1 ni présente dans le CRM Notion.
+- Une notification Tally utilise le groupe si son identifiant est configuré, sinon le chat privé existant.
+- Un message de groupe ne peut pas créer de commande.
+- Les tests Worker et `git diff --check` réussissent.
 
 ## Reprise
 
-Lot terminé.
+Lot terminé : le groupe est configuré comme destinataire des notifications Tally et le webhook Telegram est rétabli.
+
+## Validation
+
+- Les 31 tests Worker et `git diff --check` passent.
+- Le secret Cloudflare du groupe est configuré sans être ajouté au dépôt.
+- Worker déployé : version `a935c766-cf0e-463b-92d8-aea17daee302` ; webhook réenregistré après la lecture de l'identifiant du groupe.
