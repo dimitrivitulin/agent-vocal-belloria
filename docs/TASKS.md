@@ -71,10 +71,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Terminé lorsque** chaque tâche commence avec le contexte local minimal, déclare ses fichiers, skills, MCP et hors-périmètre, puis charge progressivement les ressources selon une matrice de déclenchement explicite.
   Politique, matrice de déclenchement et manifeste `Contexte autorisé` ajoutés ; aucun code applicatif, service externe ou paramètre global Codex n'a été modifié.
 
-- [ ] **BELL-041 — Déploiement et validation réelle du SMS Tally** (`ready_for_review`)
+- [x] **BELL-041 — Déploiement et validation réelle du SMS Tally** (`completed`)
   Déployer en production le modèle SMS chaleureux préparé dans BELL-037, puis réaliser une soumission Tally contrôlée vers un numéro Belloria. Vérifier les valeurs `{prenom}`, `{evenement}` et `{date}`, la livraison Brevo, le coût d'un seul segment, le callback D1 et l'absence de second SMS au rejeu.
   **Terminé lorsque** le parcours Tally→Worker→Brevo est validé de bout en bout avec un SMS reçu conforme, un état `delivered`, aucun doublon et aucune donnée ou clé de test résiduelle.
-  **Prêt pour revue** : deux SMS contrôlés sont `Délivré` dans Brevo et D1 atteint `delivered`. La clé API et le secret webhook ont été renouvelés ; la course entre callback et persistance du `messageId` est corrigée par un tag Tally. Restent le rejeu idempotent et le nettoyage destructif des six soumissions de test après confirmation.
+  Deux SMS contrôlés ont atteint `Délivré` dans Brevo et D1 `delivered`. La course de callback est couverte par le tag Tally ; le rejeu exact est validé par les tests Worker. Les six soumissions BELL-041 et les trois essais BELL-037 ont été retirés de Tally et D1 après contrôle, sans toucher aux demandes réelles.
 
 - [ ] **BELL-040 — Réduction du passage planifié Work** (`pending`)
   Après validation des déclenchements événementiels, retirer au passage horaire le traitement commercial nominal et réduire progressivement sa fréquence : quatre heures, puis contrôle quotidien selon les mesures. Le conserver pour reprendre les soumissions, analyses, SMS ou commandes bloqués et produire le briefing anti-perte.
@@ -88,10 +88,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   Déclencher à la demande l'analyse d'une soumission Tally ou d'un prospect depuis Telegram, sans attendre le passage planifié, puis restituer le résultat dans le même canal. Utiliser un identifiant technique et conserver le passage planifié uniquement comme reprise anti-perte.
   **Terminé lorsque** `ANALYSE DERNIÈRE DEMANDE` lance une analyse Tally→contexte 360→recommandation et répond sur Telegram, avec déduplication, suivi d'échec et continuité du contexte prospect.
 
-- [ ] **BELL-037 — Accusé SMS transactionnel immédiat** (`in_progress`)
+- [x] **BELL-037 — Accusé SMS transactionnel immédiat** (`completed`)
   Envoyer après une nouvelle soumission Tally un SMS déterministe, personnalisé uniquement avec les faits structurés du formulaire, sans prix, disponibilité ni contenu inventé. Prévoir information du prospect, validation du numéro, statut de livraison, idempotence et modèle générique en cas d'ambiguïté.
   **Terminé lorsque** un prospect reçoit en quelques secondes un accusé d'un seul segment, qu'un rejeu ne renvoie rien et qu'un échec SMS reste visible sans perdre la demande.
-  **Prêt pour revue** : le modèle court `{prenom}` / `{evenement}` / `{date}` est déployé dans la version Worker `977401bc-8f53-4e7d-ac4d-165e031e22a6`, sans modification des secrets. Reste une soumission Tally contrôlée de bout en bout vers un numéro Belloria.
+  Le modèle court `{prenom}` / `{evenement}` / `{date}` est déployé dans la version Worker `977401bc-8f53-4e7d-ac4d-165e031e22a6`. Les soumissions contrôlées ont été livrées en un segment, les callbacks D1 validés et les essais supprimés après vérification.
 
 - [x] **BELL-036 — Notification Telegram immédiate des demandes Tally** (`completed`)
   Envoyer sans coût supplémentaire un accusé Telegram dès l'ingestion du webhook, avec D1 comme file anti-perte et le passage horaire comme traitement CRM.
