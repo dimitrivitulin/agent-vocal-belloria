@@ -1,4 +1,5 @@
-const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 const NOTION_VERSION = "2026-03-11";
 const MAX_QUERY_LENGTH = 256;
 
@@ -33,7 +34,7 @@ function notionTitle(properties) {
   return null;
 }
 
-async function googleAccessToken(env) {
+async function googleAccessToken(env, requiredScopes = [GMAIL_READ_SCOPE]) {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) {
     throw Object.assign(new Error("Gmail is not configured"), { status: 503, code: "gmail_not_configured" });
   }
@@ -48,10 +49,50 @@ async function googleAccessToken(env) {
   });
   if (!tokenResponse.ok) throw Object.assign(new Error("Gmail authorization failed"), { status: 502, code: "gmail_authorization_failed" });
   const payload = await tokenResponse.json();
-  if (!payload.access_token || (payload.scope && !payload.scope.split(" ").includes(GMAIL_SCOPE))) {
+  if (!payload.access_token || (payload.scope && requiredScopes.some((scope) => !payload.scope.split(" ").includes(scope)))) {
     throw Object.assign(new Error("Gmail authorization scope is insufficient"), { status: 502, code: "gmail_scope_insufficient" });
   }
   return payload.access_token;
+}
+
+function base64Url(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+async function sendGmail(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return actionError("invalid_request", 400, "a JSON body is required"); }
+  const to = Array.isArray(body?.to) ? body.to : [body?.to];
+  const cc = body?.cc === undefined ? [] : (Array.isArray(body.cc) ? body.cc : [body.cc]);
+  const subject = String(body?.subject || "").trim();
+  const text = String(body?.text || "").trim();
+  if (body?.confirmed !== true) return actionError("explicit_confirmation_required", 409, "Set confirmed to true only after the owner has approved the exact recipients, subject and email body.");
+  if (!to.length || to.length > 20 || ![...to, ...cc].every((email) => validEmail(String(email))) || !subject || subject.length > 200 || !text || text.length > 15000) {
+    return actionError("invalid_request", 400, "valid recipients, a subject up to 200 characters and an email body up to 15000 characters are required");
+  }
+  const accessToken = await googleAccessToken(env, [GMAIL_SEND_SCOPE]);
+  const mime = [
+    `To: ${to.join(", ")}`,
+    cc.length ? `Cc: ${cc.join(", ")}` : null,
+    `Subject: ${subject}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "",
+    text
+  ].filter((line) => line !== null).join("\r\n");
+  const result = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" }, body: JSON.stringify({ raw: base64Url(mime) })
+  });
+  if (!result.ok) throw Object.assign(new Error("Gmail send failed"), { status: 502, code: "gmail_send_failed" });
+  const sent = await result.json();
+  return response({ sent: true, id: sent.id || null, thread_id: sent.threadId || null, recipients: to, subject });
 }
 
 async function gmailRecent(env, url) {
@@ -129,6 +170,28 @@ async function updateNotionPage(request, env) {
   return response({ updated: true, id: page.id, title: notionTitle(page.properties), last_edited_time: page.last_edited_time || null });
 }
 
+async function createNotionPage(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return actionError("invalid_request", 400, "a JSON body is required"); }
+  const properties = body?.properties;
+  if (body?.confirmed !== true) return actionError("explicit_confirmation_required", 409, "Set confirmed to true only after the owner has approved the exact CRM page to create.");
+  if (!env.NOTION_DATA_SOURCE_ID || !properties || typeof properties !== "object" || Array.isArray(properties) || Object.keys(properties).length > 30) {
+    return actionError("invalid_request", 400, "NOTION_DATA_SOURCE_ID and up to 30 Notion properties are required");
+  }
+  const page = await notionRequest(env, "/pages", { method: "POST", body: JSON.stringify({ parent: { type: "data_source_id", data_source_id: env.NOTION_DATA_SOURCE_ID }, properties }) });
+  return response({ created: true, id: page.id, title: notionTitle(page.properties), url: page.url || null });
+}
+
+async function archiveNotionPage(request, env) {
+  const pageId = new URL(request.url).searchParams.get("page_id") || "";
+  if (!/^[0-9a-f-]{32,36}$/i.test(pageId)) return actionError("invalid_request", 400, "page_id must be a Notion page identifier");
+  let body;
+  try { body = await request.json(); } catch { return actionError("invalid_request", 400, "a JSON body with confirmed true is required"); }
+  if (body?.confirmed !== true) return actionError("explicit_confirmation_required", 409, "Set confirmed to true only after the owner has approved archiving this exact CRM page.");
+  const page = await notionRequest(env, `/pages/${encodeURIComponent(pageId)}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+  return response({ archived: true, id: page.id });
+}
+
 export const GPT_ACTIONS_OPENAPI = {
   openapi: "3.1.0",
   info: { title: "Belloria commercial actions", version: "1.0.0", description: "Private, read-first Gmail and Notion access. Notion writes require explicit confirmation." },
@@ -136,10 +199,13 @@ export const GPT_ACTIONS_OPENAPI = {
   paths: {
     "/gpt-actions/status": { get: { operationId: "getIntegrationStatus", summary: "Read which private integrations are configured", responses: { "200": { description: "Integration status" } } } },
     "/gpt-actions/gmail/recent": { get: { operationId: "searchRecentGmail", summary: "Read recent Gmail metadata and snippets; never sends email", parameters: [{ name: "query", in: "query", schema: { type: "string" } }, { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 10 } }], responses: { "200": { description: "Messages" } } } },
+    "/gpt-actions/gmail/send": { post: { operationId: "sendGmailAfterConfirmation", summary: "Send an email from Gmail only after the owner has approved the exact recipients, subject and body", requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["to", "subject", "text", "confirmed"], properties: { to: { oneOf: [{ type: "string", format: "email" }, { type: "array", items: { type: "string", format: "email" } }] }, cc: { type: "array", items: { type: "string", format: "email" } }, subject: { type: "string" }, text: { type: "string" }, confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Sent Gmail message" } } } },
     "/gpt-actions/notion/search": { get: { operationId: "searchNotionPages", summary: "Search CRM pages in Notion", parameters: [{ name: "query", in: "query", required: true, schema: { type: "string" } }, { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 10 } }], responses: { "200": { description: "Pages" } } } },
     "/gpt-actions/notion/page": {
       get: { operationId: "getNotionPage", summary: "Read a Notion CRM page", parameters: [{ name: "page_id", in: "query", required: true, schema: { type: "string" } }], responses: { "200": { description: "CRM page" } } },
-      patch: { operationId: "updateNotionPageAfterConfirmation", summary: "Update a CRM page only after the owner explicitly confirms the exact properties", requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["page_id", "properties", "confirmed"], properties: { page_id: { type: "string" }, properties: { type: "object" }, confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Updated CRM page" } } }
+      post: { operationId: "createNotionCrmPageAfterConfirmation", summary: "Create a CRM page only after the owner has approved its exact properties", requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["properties", "confirmed"], properties: { properties: { type: "object" }, confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Created CRM page" } } },
+      patch: { operationId: "updateNotionPageAfterConfirmation", summary: "Update a CRM page only after the owner explicitly confirms the exact properties", requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["page_id", "properties", "confirmed"], properties: { page_id: { type: "string" }, properties: { type: "object" }, confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Updated CRM page" } } },
+      delete: { operationId: "archiveNotionCrmPageAfterConfirmation", summary: "Archive a CRM page only after the owner has approved the exact page", parameters: [{ name: "page_id", in: "query", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["confirmed"], properties: { confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Archived CRM page" } } }
     }
   },
   components: { securitySchemes: { BearerAuth: { type: "http", scheme: "bearer" } } }, security: [{ BearerAuth: [] }]
@@ -150,11 +216,14 @@ export async function gptActions(request, env) {
   if (url.pathname === "/gpt-actions/openapi.json" && request.method === "GET") return response(GPT_ACTIONS_OPENAPI);
   if (!actionTokenIsValid(request, env)) return actionError("unauthorized", 401, "A valid Bearer token is required");
   try {
-    if (url.pathname === "/gpt-actions/status" && request.method === "GET") return response({ gmail_read: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN), notion_read_write: Boolean(env.NOTION_TOKEN), email_sending: false });
+    if (url.pathname === "/gpt-actions/status" && request.method === "GET") return response({ gmail_read_send: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN), notion_crm: Boolean(env.NOTION_TOKEN && env.NOTION_DATA_SOURCE_ID), email_sending: true });
     if (url.pathname === "/gpt-actions/gmail/recent" && request.method === "GET") return gmailRecent(env, url);
+    if (url.pathname === "/gpt-actions/gmail/send" && request.method === "POST") return sendGmail(request, env);
     if (url.pathname === "/gpt-actions/notion/search" && request.method === "GET") return notionSearch(env, url);
     if (url.pathname === "/gpt-actions/notion/page" && request.method === "GET") return notionPage(env, url);
+    if (url.pathname === "/gpt-actions/notion/page" && request.method === "POST") return createNotionPage(request, env);
     if (url.pathname === "/gpt-actions/notion/page" && request.method === "PATCH") return updateNotionPage(request, env);
+    if (url.pathname === "/gpt-actions/notion/page" && request.method === "DELETE") return archiveNotionPage(request, env);
     return actionError("not_found", 404, "Action not found");
   } catch (error) {
     return actionError(error.code || "upstream_failed", error.status || 502, error.message || "The integration request failed");

@@ -6,7 +6,7 @@ Dernière mise à jour: 2026-08-08
 
 ## Objectif
 
-Créer un GPT personnalisé accessible dans ChatGPT sur téléphone, avec le contexte commercial Belloria et les règles nécessaires pour qualifier un prospect, recommander une action, préparer un email et guider la mise à jour du CRM.
+Créer un GPT personnalisé accessible dans ChatGPT sur téléphone, avec le contexte commercial Belloria et les règles nécessaires pour qualifier un prospect, recommander une action, envoyer un email confirmé et gérer le CRM.
 
 ## Contexte autorisé
 
@@ -14,19 +14,19 @@ Créer un GPT personnalisé accessible dans ChatGPT sur téléphone, avec le con
 - Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `docs/PROJECT_CONTEXT.md`, `worker/src/index.js`, `wrangler.jsonc`, contrat MCP et documentation commerciale/CRM directement référencée.
 - Skill requis : `openai-docs` pour vérifier les capacités et limites actuelles des GPT personnalisés et de leurs actions.
 - MCP requis : Chrome Colibri pour la configuration du GPT ; aucun accès Gmail/Notion réel pendant les tests locaux.
-- Hors périmètre : déclenchement automatique d’un GPT depuis un webhook, envoi automatique d’email client, secrets réels, API OpenAI payante.
+- Hors périmètre : déclenchement automatique d’un GPT depuis un webhook, envoi automatique sans confirmation explicite, secrets réels dans Git, API OpenAI payante.
 
 ## Périmètre
 
 - Constituer le contexte et les instructions du GPT Belloria : rôle, ton, offres validées, qualification, CRM, préparation d’email et garde-fous.
 - Créer le GPT privé dans ChatGPT et y charger la base de connaissance adaptée.
 - Préparer le contrat d’actions futur pour la lecture du dernier formulaire et les mutations explicitement confirmées.
-- Exposer des Actions GPT sécurisées permettant la lecture Gmail/Notion et la préparation contrôlée d’une mutation.
+- Exposer des Actions GPT sécurisées permettant la lecture et l’envoi d’emails confirmés, ainsi que la création, mise à jour et archivage confirmés des fiches CRM Notion.
 
 ## Critères de réussite
 
 - Le GPT répond comme un assistant commercial Belloria, sans inventer de prix, disponibilité ni promesse.
-- Il peut conduire une analyse complète à partir d’informations fournies, proposer une mise à jour CRM et rédiger un email à valider.
+- Il peut conduire une analyse complète à partir d’informations fournies, envoyer un email confirmé et gérer le CRM après confirmation.
 - Le GPT reste privé et exploitable sur téléphone ; les actions externes sont explicitement confirmées.
 
 ## Résultat intermédiaire

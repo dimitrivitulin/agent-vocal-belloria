@@ -831,7 +831,7 @@ test("exposes a public action schema and protects every private GPT action", asy
   assert.equal(denied.status, 401);
 
   const granted = await handleRequest(new Request("https://worker.test/gpt-actions/status", { headers: { authorization: "Bearer action-secret" } }), environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_TOKEN: "notion-secret" }));
-  assert.deepEqual(await granted.json(), { gmail_read: false, notion_read_write: true, email_sending: false });
+  assert.deepEqual(await granted.json(), { gmail_read_send: false, notion_crm: false, email_sending: true });
 });
 
 test("reads Gmail metadata through the private Action without sending mail", async () => {
@@ -851,6 +851,25 @@ test("reads Gmail metadata through the private Action without sending mail", asy
     assert.equal(result.status, 200);
     assert.deepEqual((await result.json()).messages, [{ id: "message-1", thread_id: "thread-1", from: "Camille <camille@example.test>", to: null, subject: "Demande mariage", date: null, snippet: "Bonjour Belloria" }]);
     assert.equal(calls.some((call) => call.options.method === "POST" && String(call.url).includes("gmail.googleapis.com")), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("sends Gmail only after the exact email has been explicitly confirmed", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url) === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "access-token", scope: "https://www.googleapis.com/auth/gmail.send" });
+    if (String(url).endsWith("/messages/send")) return Response.json({ id: "sent-1", threadId: "thread-1" });
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const env = environment({ GPT_ACTIONS_TOKEN: "action-secret", GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh" });
+    const denied = await handleRequest(new Request("https://worker.test/gpt-actions/gmail/send", { method: "POST", headers: { authorization: "Bearer action-secret", "content-type": "application/json" }, body: JSON.stringify({ to: "camille@example.test", subject: "Votre demande", text: "Bonjour Camille" }) }), env);
+    assert.equal(denied.status, 409);
+    const allowed = await handleRequest(new Request("https://worker.test/gpt-actions/gmail/send", { method: "POST", headers: { authorization: "Bearer action-secret", "content-type": "application/json" }, body: JSON.stringify({ to: "camille@example.test", subject: "Votre demande", text: "Bonjour Camille", confirmed: true }) }), env);
+    assert.deepEqual(await allowed.json(), { sent: true, id: "sent-1", thread_id: "thread-1", recipients: ["camille@example.test"], subject: "Votre demande" });
+    assert.equal(calls.filter((call) => String(call.url).endsWith("/messages/send")).length, 1);
   } finally { globalThis.fetch = originalFetch; }
 });
 
