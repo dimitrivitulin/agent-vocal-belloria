@@ -466,6 +466,32 @@ function tallyFieldStringValues(field) {
     .map((value) => value.trim());
 }
 
+function isSensitiveTallyField(field) {
+  const label = normalizedFieldLabel(field);
+  return ["PHONE_NUMBER", "INPUT_PHONE_NUMBER", "EMAIL", "INPUT_EMAIL"].includes(field?.type)
+    || /(?:e-?mail|courriel|telephone|tel\b|mobile|portable|phone|adresse)/.test(label);
+}
+
+function telegramTallyText(value, maxLength = 300) {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, maxLength) : null;
+}
+
+export function tallyTelegramContent(submission) {
+  const details = (submission?.fields || [])
+    .filter((field) => !isSensitiveTallyField(field))
+    .map((field) => {
+      const label = telegramTallyText(String(field?.label || field?.key || ""), 80);
+      const values = tallyFieldStringValues(field).map((value) => telegramTallyText(value)).filter(Boolean);
+      return label && values.length ? `${label} : ${[...new Set(values)].join(", ")}` : null;
+    })
+    .filter(Boolean);
+  const header = `Nouvelle demande Tally${submission?.formName ? ` — ${telegramTallyText(submission.formName, 120)}` : ""}`;
+  const content = [header, ...details].join("\n");
+  return content.length <= TELEGRAM_TEXT_MAX_CHARS ? content : content.slice(0, TELEGRAM_TEXT_MAX_CHARS - 1).trimEnd() + "…";
+}
+
 function tallyFieldValue(fields, labelPattern) {
   const values = (fields || [])
     .filter((field) => labelPattern.test(normalizedFieldLabel(field)))
@@ -577,9 +603,9 @@ async function brevoSmsWebhook(request, env) {
   return json({ accepted: Number(result.meta?.changes || 0) > 0 ? 1 : 0 });
 }
 
-async function notifyTallyIngestion(env) {
+async function notifyTallyIngestion(env, submission) {
   try {
-    await sendText(env, "Nouvelle demande Tally reçue. Traitement CRM en attente.");
+    await sendText(env, tallyTelegramContent(submission));
     console.log(JSON.stringify({ event: "tally_telegram_ack_sent" }));
   } catch (error) {
     console.log(JSON.stringify({ event: "tally_telegram_ack_failed", code: cleanErrorCode(error, "telegram_ack_failed") }));
@@ -605,7 +631,7 @@ async function tallyWebhook(request, env, context) {
   ).bind(submission.eventId, submission.submissionId, submission.formId, submission.formName, submission.createdAt, JSON.stringify(document)).run();
   const inserted = Number(result.meta?.changes || 0) === 1;
   if (inserted && context?.waitUntil) {
-    context.waitUntil(Promise.all([notifyTallyIngestion(env), sendTallySms(env, submission)]));
+    context.waitUntil(Promise.all([notifyTallyIngestion(env, submission), sendTallySms(env, submission)]));
   }
   console.log(JSON.stringify({ event: "tally_webhook_ingested", accepted: inserted ? 1 : 0, form_id: submission.formId }));
   return json({ accepted: inserted ? 1 : 0 });

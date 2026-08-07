@@ -1,35 +1,40 @@
-# BELL-042 — Chargement du contexte à la demande
+# BELL-043 — Détails Tally dans Telegram
 
-Statut: completed
-Branche: `codex/bell-042-contexte-a-la-demande`
+Statut: ready_for_review
+Branche: `codex/bell-043-details-tally-telegram`
 Dernière mise à jour: 2026-08-07
 
 ## Objectif
 
-Formaliser une méthode qui limite chaque tâche Codex aux fichiers, skills et MCP réellement nécessaires à sa feature.
+Envoyer immédiatement dans le chat Telegram privé un résumé exploitable de chaque nouveau formulaire Tally.
 
 ## Contexte autorisé
 
-- Domaine : règles de travail et gestion du contexte Codex.
-- Fichiers initiaux : `AGENTS.md`, `CURRENT_TASK.md`, `docs/TASKS.md`.
+- Domaine : code local Worker Cloudflare et notification Telegram.
+- Fichiers initiaux : `CURRENT_TASK.md`, `docs/TASKS.md`, `worker/src/index.js`, `worker/test/worker.test.js`, `docs/chatgpt-work-automation.md`.
 - Skill requis : aucun pour l'implémentation locale.
 - MCP requis : aucun.
-- Hors périmètre : code applicatif, services externes et configuration globale Codex.
+- Hors périmètre : ChatGPT Work, Tally, Notion, Brevo, secrets et données de production.
 
 ## Périmètre
 
-- Ajouter à `AGENTS.md` une politique de chargement progressif et une matrice de déclenchement par domaine.
-- Rendre obligatoire un manifeste de contexte dans `CURRENT_TASK.md`.
-- Conserver le contexte initial minimal déjà défini et éviter tout connecteur « au cas où ».
-- Inscrire le lot dans la feuille de route sans modifier le lot SMS BELL-041.
+- Remplacer l'accusé Telegram générique par un résumé des champs structurés du formulaire.
+- Exclure téléphone, email et toute valeur non prévue ou ambiguë.
+- Préserver l'idempotence : une soumission ne produit qu'un seul message.
+- Ajouter les tests et la documentation nécessaires.
 
 ## Critères de réussite
 
-- Les règles indiquent quoi charger, quand déclencher un skill ou MCP et quand créer une nouvelle tâche.
-- Le lot actif déclare fichiers, skills, MCP et hors-périmètre.
-- `CURRENT_TASK.md` reste sous 100 lignes.
-- Le diff est documentaire, ciblé et passe `git diff --check`.
+- Le message contient les détails métier reconnus disponibles, avec un rendu lisible.
+- Les coordonnées personnelles ne sont jamais incluses.
+- Le rejeu ne produit aucun second message.
+- Les tests du Worker et `git diff --check` réussissent.
+
+## Validation
+
+- Les 30 tests Worker passent, dont le résumé Telegram et le rejeu idempotent.
+- Version Cloudflare `43590b58-fa74-48a9-ae76-e096466fae05` déployée ; `/health` répond `ok`.
 
 ## Reprise
 
-Pour tout nouveau lot, remplir `Contexte autorisé` avant de charger une ressource spécialisée ; reprendre BELL-041 dans sa tâche dédiée si la validation SMS est poursuivie.
+Réaliser une soumission Tally contrôlée et vérifier le contenu reçu dans Telegram avant de marquer le lot terminé.

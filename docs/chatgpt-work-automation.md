@@ -4,7 +4,7 @@
 
 La tâche cloud s'exécute toutes les heures, dans le fuseau `Europe/Paris`, avec une seule exécution active. Le planificateur ChatGPT refuse les récurrences inférieures à une heure ; cette cadence est donc le minimum supporté. Elle traite au maximum 20 messages candidats par passage, du plus ancien au plus récent. Elle ne lit pas les pièces jointes et n'envoie jamais d'email.
 
-Les labels et filtres Gmail Belloria sont actifs et le passage contrôlé est validé. La tâche `Passage Belloria automatisé` est active en mode Work ; son premier passage sans candidat ni commande s'est terminé sans notification. Le MCP Belloria est connecté par OAuth dans ChatGPT. La cible de test est la base `Demandes & événements` décrite dans `docs/notion-crm-operational.md`; le CRM historique ne doit pas être muté. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
+Les labels et filtres Gmail Belloria sont actifs et le passage contrôlé est validé. La tâche `Passage Belloria automatisé` est active en mode Work ; son premier passage sans candidat ni commande s'est terminé sans notification. Le MCP Belloria est connecté par OAuth dans ChatGPT. La cible de test est la base `Demandes & événements` décrite dans `docs/notion-crm-operational.md`; le CRM historique ne doit pas être muté. Le canal de pilotage est le chat Telegram privé configuré dans le Worker. Dès l'ingestion, le Worker y envoie aussi le résumé des champs non sensibles du formulaire Tally ; téléphone, email et adresse sont exclus. Les tests locaux utilisent `MemoryInbox` et des fonctions doubles.
 
 ## Application MCP Belloria
 

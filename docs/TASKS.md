@@ -56,6 +56,11 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [ ] **BELL-043 — Détails Tally dans Telegram** (`ready_for_review`)
+  Remplacer l'accusé Telegram générique par un résumé immédiat des champs métier du formulaire Tally, sans coordonnées du prospect et sans doublon au rejeu.
+  **Terminé lorsque** une soumission contrôlée affiche dans le chat privé les détails non sensibles attendus, une seule fois.
+  **Prêt pour revue** : Worker déployé (version `43590b58-fa74-48a9-ae76-e096466fae05`), résumé et masquage des coordonnées validés par 30 tests ; une soumission Tally réelle reste à vérifier.
+
 - [x] **BELL-042 — Chargement du contexte à la demande** (`completed`)
   Formaliser dans les règles du dépôt un manifeste par lot, un skill initial au maximum et des MCP ou connecteurs utilisés uniquement lorsqu'une dépendance concrète l'exige.
   **Terminé lorsque** chaque tâche commence avec le contexte local minimal, déclare ses fichiers, skills, MCP et hors-périmètre, puis charge progressivement les ressources selon une matrice de déclenchement explicite.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import test from "node:test";
-import { createWorkerEntrypoint, extractTallySubmission, extractTelegramCommand, handleRequest, normalizeFrenchMobile, oauthApiHandler, oauthDefaultHandler, tallySmsContent, tallySmsRecipient } from "../src/index.js";
+import { createWorkerEntrypoint, extractTallySubmission, extractTelegramCommand, handleRequest, normalizeFrenchMobile, oauthApiHandler, oauthDefaultHandler, tallySmsContent, tallySmsRecipient, tallyTelegramContent } from "../src/index.js";
 
 globalThis.crypto ||= webcrypto;
 
@@ -300,6 +300,19 @@ test("normalizes one French mobile and builds one safe GSM-7 acknowledgement", (
   assert.equal(tallySmsContent(tallyEvent().data.fields.filter((field) => field.type !== "DATE")), null);
 });
 
+test("builds a Telegram Tally summary without contact details", () => {
+  const fields = [
+    ...tallyEvent().data.fields,
+    { label: "Email", type: "EMAIL", value: "camille@example.test" },
+    { label: "Nombre d'invités", type: "NUMBER", value: "80" },
+    { label: "Votre budget", type: "INPUT_TEXT", value: "3 000 €" }
+  ];
+  const content = tallyTelegramContent({ formName: "Devis express", fields });
+  assert.equal(content, "Nouvelle demande Tally — Devis express\nNom : Camille Martin\nType d'événement : Mariage\nDate de l'événement : 2026-10-03\nNombre d'invités : 80\nVotre budget : 3 000 €");
+  assert.equal(content.includes("06 12 34 56 78"), false);
+  assert.equal(content.includes("camille@example.test"), false);
+});
+
 test("builds the acknowledgement from the current production Tally labels", () => {
   const fields = [
     { label: "Votre nom et prénom", type: "INPUT_TEXT", value: "Cyndy Hernandez" },
@@ -423,7 +436,7 @@ test("acknowledges a newly persisted Tally submission on Telegram only once", as
 
     assert.deepEqual(sent, [{
       chat_id: "123456",
-      text: "Nouvelle demande Tally reçue. Traitement CRM en attente."
+      text: "Nouvelle demande Tally — Devis express\nNom : Camille Martin\nType d'événement : Mariage\nDate de l'événement : 2026-10-03"
     }]);
   } finally { globalThis.fetch = originalFetch; }
 });
