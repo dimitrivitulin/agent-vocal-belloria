@@ -82,7 +82,7 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 - [ ] **BELL-039 — GPT Belloria, assistant commercial** (`in_progress`)
   Créer un GPT privé utilisable dans ChatGPT sur téléphone, nourri du contexte commercial Belloria, capable de qualifier un prospect, recommander une action, préparer un email et guider la mise à jour du CRM. Les actions externes restent explicitement confirmées.
-  GPT privé et passerelle d'Actions locale créés ; l'activation Gmail/Notion attend les identifiants OAuth/API dédiés, qui ne sont pas fournis par les plugins ChatGPT personnels.
+  GPT privé et passerelle d'Actions publiés ; Gmail est activé et testé. La connexion Notion est créée et le CRM partagé, mais l'API Notion n'expose pas encore la source de données nécessaire aux créations CRM.
   **Terminé lorsque** le GPT applique les offres et règles validées, ne fabrique aucune promesse et peut accompagner une action commerciale contrôlée à partir du contexte fourni, avec les connexions Gmail/Notion activées.
 
 - [ ] **BELL-038 — Analyse ChatGPT Work déclenchée depuis Telegram** (`pending`)

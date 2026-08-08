@@ -33,9 +33,10 @@ Créer un GPT personnalisé accessible dans ChatGPT sur téléphone, avec le con
 
 - GPT privé `Belloria — Assistant commercial` créé, avec les référentiels commercial, conversion, prospect 360 et CRM chargés ; accès téléphone prêt.
 - Passerelle d'Actions ajoutée et déployée au Worker (version `50dce58f-e0b7-4d09-8221-a49c8c1d65ec`) : recherche Gmail en lecture seule, recherche/lecture Notion, mise à jour Notion avec confirmation explicite et jeton dédié.
-- L'activation réelle attend les identifiants OAuth Gmail et le jeton de connexion Notion, distincts des plugins ChatGPT personnels.
+- Gmail OAuth est configuré et testé en lecture depuis le Worker ; l'Action GPT privée est publiée avec une clé Bearer dédiée. L'envoi reste conditionné à la confirmation explicite.
+- La connexion Notion `Belloria GPT — CRM` est créée, avec lecture, insertion et mise à jour activées et le CRM partagé. L'API Notion ne retourne pas encore la base partagée, donc la création CRM reste désactivée tant que son identifiant de source n'est pas exposé.
 
 ## Validation
 
-- Tests Worker : 34 réussis le 2026-08-08 ; la surface OpenAPI, l'authentification, la lecture Gmail sans envoi et le refus de mutation CRM sans confirmation sont couverts.
+- Tests Worker : 35 réussis le 2026-08-08 ; la surface OpenAPI, l'authentification, la lecture Gmail sans envoi et le refus de mutation CRM sans confirmation sont couverts.
 - `git diff --check` est valide.

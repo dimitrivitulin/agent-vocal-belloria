@@ -208,7 +208,16 @@ export const GPT_ACTIONS_OPENAPI = {
       delete: { operationId: "archiveNotionCrmPageAfterConfirmation", summary: "Archive a CRM page only after the owner has approved the exact page", parameters: [{ name: "page_id", in: "query", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["confirmed"], properties: { confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Archived CRM page" } } }
     }
   },
-  components: { securitySchemes: { BearerAuth: { type: "http", scheme: "bearer" } } }, security: [{ BearerAuth: [] }]
+  components: {
+    schemas: {
+      ApiError: {
+        type: "object",
+        properties: { error: { type: "object", properties: { code: { type: "string" }, message: { type: "string" } } } }
+      }
+    },
+    securitySchemes: { BearerAuth: { type: "http", scheme: "bearer" } }
+  },
+  security: [{ BearerAuth: [] }]
 };
 
 export async function gptActions(request, env) {
