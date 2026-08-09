@@ -40,14 +40,20 @@ class FakeDb {
         const [sms_status, messageId, sms_error_code, providerMessageId, eventId] = args;
         const row = [...this.tally.values()].find((item) => item.sms_provider_id === providerMessageId)
           || (this.tally.get(eventId)?.sms_status === "pending" ? this.tally.get(eventId) : null);
-        if (!row) return { meta: { changes: 0 } };
+        if (!row
+          || (sms_status === "accepted" && row.sms_status !== "pending")
+          || (sms_status === "failed" && !["pending", "accepted"].includes(row.sms_status))
+          || (sms_status === "delivered" && !["pending", "accepted", "failed"].includes(row.sms_status))) return { meta: { changes: 0 } };
         Object.assign(row, { sms_status, sms_provider_id: row.sms_provider_id || messageId, sms_error_code, sms_updated_at: new Date().toISOString() });
         return { meta: { changes: 1 } };
       }
       if (sql.includes("WHERE sms_provider_id")) {
         const [sms_status, sms_error_code, messageId] = args;
         const row = [...this.tally.values()].find((item) => item.sms_provider_id === messageId);
-        if (!row) return { meta: { changes: 0 } };
+        if (!row
+          || (sms_status === "accepted" && row.sms_status !== "pending")
+          || (sms_status === "failed" && !["pending", "accepted"].includes(row.sms_status))
+          || (sms_status === "delivered" && !["pending", "accepted", "failed"].includes(row.sms_status))) return { meta: { changes: 0 } };
         Object.assign(row, { sms_status, sms_error_code, sms_updated_at: new Date().toISOString() });
         return { meta: { changes: 1 } };
       }
@@ -520,6 +526,35 @@ test("authenticates Brevo delivery callbacks and updates the matching SMS only",
   assert.equal(JSON.stringify(env.DB.tally.get("event-1")).includes("33600000000"), false);
 });
 
+test("applies monotone Brevo callback transitions and leaves rejected replays untouched", async () => {
+  const env = environment({ BREVO_WEBHOOK_TOKEN: "brevo-webhook-token" });
+  const row = { event_id: "event-1", state: "pending", sms_status: "pending", sms_provider_id: "1511882900176220", sms_updated_at: "2026-08-09T10:00:00.000Z" };
+  env.DB.tally.set("event-1", row);
+
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "accepted" }), env)).json(), { accepted: 1 });
+  assert.equal(row.sms_status, "accepted");
+  const acceptedAt = row.sms_updated_at;
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "accepted" }), env)).json(), { accepted: 0 });
+  assert.equal(row.sms_updated_at, acceptedAt);
+
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "hard_bounce" }), env)).json(), { accepted: 1 });
+  assert.equal(row.sms_status, "failed");
+  const failedAt = row.sms_updated_at;
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "hard_bounce" }), env)).json(), { accepted: 0 });
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "accepted" }), env)).json(), { accepted: 0 });
+  assert.equal(row.sms_status, "failed");
+  assert.equal(row.sms_updated_at, failedAt);
+
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "delivered" }), env)).json(), { accepted: 1 });
+  assert.equal(row.sms_status, "delivered");
+  const deliveredAt = row.sms_updated_at;
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "delivered" }), env)).json(), { accepted: 0 });
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "accepted" }), env)).json(), { accepted: 0 });
+  assert.deepEqual(await (await handleRequest(brevoWebhook({ messageId: 1511882900176220, msg_status: "hard_bounce" }), env)).json(), { accepted: 0 });
+  assert.equal(row.sms_status, "delivered");
+  assert.equal(row.sms_updated_at, deliveredAt);
+});
+
 test("matches an early Brevo callback through the Tally event tag", async () => {
   const env = environment({ BREVO_WEBHOOK_TOKEN: "brevo-webhook-token" });
   env.DB.tally.set("event-1", { event_id: "event-1", state: "pending", sms_status: "pending", sms_provider_id: null });
@@ -531,6 +566,14 @@ test("matches an early Brevo callback through the Tally event tag", async () => 
   }), env)).json(), { accepted: 1 });
   assert.equal(env.DB.tally.get("event-1").sms_status, "delivered");
   assert.equal(env.DB.tally.get("event-1").sms_provider_id, "1511882900176220");
+  const deliveredAt = env.DB.tally.get("event-1").sms_updated_at;
+  assert.deepEqual(await (await handleRequest(brevoWebhook({
+    messageId: 999,
+    msg_status: "hard_bounce",
+    tag: ["event-1"]
+  }), env)).json(), { accepted: 0 });
+  assert.equal(env.DB.tally.get("event-1").sms_status, "delivered");
+  assert.equal(env.DB.tally.get("event-1").sms_updated_at, deliveredAt);
 });
 
 test("keeps the Tally request pending when SMS cannot be sent", async () => {

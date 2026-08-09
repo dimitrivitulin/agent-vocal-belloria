@@ -596,11 +596,11 @@ async function brevoSmsWebhook(request, env) {
   const errorCode = status === "failed" ? `brevo_${providerStatus}` : null;
   const result = eventId
     ? await env.DB.prepare(
-      "UPDATE tally_submissions SET sms_status = ?, sms_provider_id = COALESCE(sms_provider_id, ?), sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sms_provider_id = ? OR (event_id = ? AND sms_status = 'pending')"
-    ).bind(status, messageId, errorCode, messageId, eventId).run()
+      "UPDATE tally_submissions SET sms_status = ?, sms_provider_id = COALESCE(sms_provider_id, ?), sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE (sms_provider_id = ? OR (event_id = ? AND sms_status = 'pending')) AND ((? = 'accepted' AND sms_status = 'pending') OR (? = 'failed' AND sms_status IN ('pending', 'accepted')) OR (? = 'delivered' AND sms_status IN ('pending', 'accepted', 'failed')))"
+    ).bind(status, messageId, errorCode, messageId, eventId, status, status, status).run()
     : await env.DB.prepare(
-      "UPDATE tally_submissions SET sms_status = ?, sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sms_provider_id = ?"
-    ).bind(status, errorCode, messageId).run();
+      "UPDATE tally_submissions SET sms_status = ?, sms_error_code = ?, sms_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE sms_provider_id = ? AND ((? = 'accepted' AND sms_status = 'pending') OR (? = 'failed' AND sms_status IN ('pending', 'accepted')) OR (? = 'delivered' AND sms_status IN ('pending', 'accepted', 'failed')))"
+    ).bind(status, errorCode, messageId, status, status, status).run();
   console.log(JSON.stringify({ event: "tally_sms_status", status, matched: Number(result.meta?.changes || 0) }));
   return json({ accepted: Number(result.meta?.changes || 0) > 0 ? 1 : 0 });
 }

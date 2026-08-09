@@ -27,6 +27,8 @@ Configurer ensuite chez Brevo un webhook transactionnel, canal `sms`, vers `/web
 - `failed` : appel fournisseur ou livraison en échec ;
 - `skipped` : numéro invalide/ambigu, personnalisation obligatoire absente/invalide ou fournisseur non configuré.
 
+Les callbacks appliquent une progression monotone : `pending` peut devenir `accepted`, `failed` ou directement `delivered` ; `accepted` peut devenir `failed` ou `delivered` ; `failed` ne peut plus redevenir `accepted`, mais une preuve ultérieure de livraison peut le faire passer à `delivered`. L'état `delivered` est terminal, tout comme `skipped`. Un callback identique ou moins fiable est un no-op et ne modifie pas `sms_updated_at`. Cette politique s'applique au rapprochement par identifiant Brevo et au rapprochement précoce par tag Tally, ce dernier restant limité aux lignes encore `pending`.
+
 `belloria_list_tally_submissions` expose ces métadonnées techniques et un code d'erreur assaini, sans numéro ni contenu SMS. Le payload Tally reste soumis à son effacement après succès CRM.
 
 ## Activation contrôlée

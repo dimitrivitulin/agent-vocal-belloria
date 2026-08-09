@@ -56,6 +56,11 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [x] **BELL-045 — Transitions SMS Brevo monotones** (`completed`)
+  Empêcher les callbacks Brevo tardifs ou répétés de faire régresser l'état SMS D1, en conservant les rapprochements par `messageId` et tag Tally.
+  **Terminé lorsque** `delivered` est terminal, les échecs suivent une politique explicite, les transitions refusées sont des no-op SQL et tous les scénarios de rejeu sont couverts par les tests Worker.
+  Les requêtes D1 imposent désormais la progression `pending → accepted → failed/delivered`, autorisent une preuve `failed → delivered` et refusent toute régression ou répétition sans toucher l'horodatage ; 36 tests Worker sont validés.
+
 - [x] **BELL-044 — Groupe de notifications Telegram** (`completed`)
   Publier les résumés Tally dans un groupe Telegram interne facultatif tout en conservant le chat privé comme unique origine des commandes et confirmations.
   **Terminé lorsque** les membres du groupe reçoivent la notification Tally, sans que leurs messages puissent déclencher une commande du bot.
