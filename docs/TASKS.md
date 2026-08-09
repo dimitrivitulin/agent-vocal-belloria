@@ -56,14 +56,18 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
-- [x] **BELL-046 — Conception des Actions GPT idempotentes** (`completed`)
-  Définir l'identité immuable, la confirmation humaine, la machine d'état D1 et la gestion honnête des résultats externes incertains pour Gmail et Notion.
-  **Terminé lorsque** les garanties locales, les limites fournisseur, les scénarios de panne et la frontière avec le mécanisme Telegram sont consignés dans une décision durable.
-  ADR-009 acceptée : proposition dédupliquée, approbation Telegram sans consommation préalable, claim atomique, états de résultat dont `unknown`, et aucun rejeu automatique d'un dispatch ambigu.
+- [x] **BELL-046 — Registre d’actions externes et approbation durable** (`completed`)
+  Créer le registre D1 immuable, la déduplication depuis une intention Telegram persistée, la présentation et la confirmation Telegram, le claim atomique et la consultation d'état, sans adaptateur fournisseur.
+  **Terminé lorsque** une action passe de `pending` à `approved` puis `claimed`, expire sans approbation et conserve la preuve locale du contenu présenté et de la confirmation.
+  Migration `external_actions`, source générique limitée à `telegram_command`, contenu canonique immuable, token, preuves Telegram et tests de rejeu/concurrence livrés. Les routes Actions GPT existantes restent inchangées.
 
-- [ ] **BELL-047 — Actions GPT confirmées, idempotentes et traçables** (`pending`)
-  Remplacer les mutations directes fondées sur `confirmed: true` par des actions immuables persistées dans D1, approuvées via Telegram, réclamées atomiquement et suivies jusqu'à un résultat certain ou `unknown`.
-  **Terminé lorsque** un rejeu ou deux appels concurrents ne produisent qu'un seul dispatch local, que le contenu exécuté est celui approuvé et qu'aucun résultat Gmail/Notion ambigu n'est rejoué automatiquement.
+- [ ] **BELL-047 — Intégration Gmail au registre d’actions** (`pending`)
+  Raccorder l'envoi Gmail au registre BELL-046 : création de proposition, exécuteur ne recevant que `action_id`, résultat certain ou `unknown` et réconciliation sans rejeu ambigu.
+  **Terminé lorsque** aucune mutation Gmail ne dépend plus seulement de `confirmed: true` et qu'un timeout fournisseur ne peut pas envoyer un doublon automatiquement.
+
+- [ ] **BELL-048 — Intégration Notion au registre d’actions** (`pending`)
+  Raccorder les créations, mises à jour et archivages Notion au registre BELL-046, avec vérification de concurrence et traitement explicite des résultats incertains.
+  **Terminé lorsque** aucune mutation Notion ne dépend plus seulement de `confirmed: true` et que les replays respectent l'état réellement lu dans Notion.
 
 - [x] **BELL-045 — Transitions SMS Brevo monotones** (`completed`)
   Empêcher les callbacks Brevo tardifs ou répétés de faire régresser l'état SMS D1, en conservant les rapprochements par `messageId` et tag Tally.

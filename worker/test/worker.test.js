@@ -6,7 +6,7 @@ import { createWorkerEntrypoint, extractTallySubmission, extractTelegramCommand,
 globalThis.crypto ||= webcrypto;
 
 class FakeDb {
-  constructor() { this.rows = new Map(); this.actions = new Map(); this.snapshots = new Map(); this.tally = new Map(); }
+  constructor() { this.rows = new Map(); this.actions = new Map(); this.externalActions = new Map(); this.snapshots = new Map(); this.tally = new Map(); }
 
   prepare(sql) {
     const db = this;
@@ -92,6 +92,39 @@ class FakeDb {
       return { meta: { changes: 1 } };
     }
 
+    if (sql.startsWith("INSERT INTO external_actions")) {
+      const [action_id, creation_key, source_type, source_id, action_type, target_json, payload_json, content_hash, confirmation_token, approval_text, modifier] = args;
+      if (!this.rows.has(source_id) || [...this.externalActions.values()].some((row) => row.creation_key === creation_key)) return { meta: { changes: 0 } };
+      const minutes = Number(String(modifier).match(/\d+/)?.[0] || 10);
+      this.externalActions.set(action_id, {
+        action_id, creation_key, source_type, source_id, action_type, target_json, payload_json, content_hash, confirmation_token, approval_text,
+        state: "pending", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
+        presented_at: null, presentation_message_id: null, presentation_chat_id: null,
+        approved_at: null, approval_command_id: null, approval_message_id: null, approval_chat_id: null, claimed_at: null
+      });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE external_actions SET state = 'expired'")) {
+      const byToken = sql.includes("confirmation_token");
+      const value = args[0];
+      let changes = 0;
+      for (const row of this.externalActions.values()) {
+        if ((byToken ? row.confirmation_token : row.action_id) !== value || row.state !== "pending" || new Date(row.expires_at) > new Date()) continue;
+        row.state = "expired";
+        changes += 1;
+      }
+      return { meta: { changes } };
+    }
+
+    if (sql.startsWith("UPDATE external_actions SET presented_at")) {
+      const [messageId, chatId, actionId] = args;
+      const row = this.externalActions.get(actionId);
+      if (!row || row.state !== "pending" || row.presentation_message_id !== null) return { meta: { changes: 0 } };
+      Object.assign(row, { presented_at: new Date().toISOString(), presentation_message_id: messageId, presentation_chat_id: chatId });
+      return { meta: { changes: 1 } };
+    }
+
     if (sql.startsWith("DELETE FROM telegram_prospect_snapshots")) {
       const changes = this.snapshots.size;
       this.snapshots.clear();
@@ -153,6 +186,28 @@ class FakeDb {
   }
 
   all(sql, args) {
+    if (sql.startsWith("SELECT * FROM external_actions WHERE creation_key")) {
+      const row = [...this.externalActions.values()].find((item) => item.creation_key === args[0]);
+      return { results: row ? [{ ...row }] : [] };
+    }
+    if (sql.startsWith("SELECT * FROM external_actions WHERE action_id")) {
+      const row = this.externalActions.get(args[0]);
+      return { results: row ? [{ ...row }] : [] };
+    }
+    if (sql.startsWith("UPDATE external_actions SET state = 'approved'")) {
+      const [commandId, messageId, chatId, token] = args;
+      const row = [...this.externalActions.values()].find((item) => item.confirmation_token === token);
+      if (!row || row.state !== "pending" || new Date(row.expires_at) <= new Date() || !row.presentation_message_id) return { results: [] };
+      Object.assign(row, { state: "approved", approved_at: new Date().toISOString(), approval_command_id: commandId, approval_message_id: messageId, approval_chat_id: chatId });
+      return { results: [{ action_id: row.action_id }] };
+    }
+    if (sql.startsWith("UPDATE external_actions SET state = 'claimed'")) {
+      const [actionId] = args;
+      const row = this.externalActions.get(actionId);
+      if (!row || row.state !== "approved") return { results: [] };
+      Object.assign(row, { state: "claimed", claimed_at: new Date().toISOString() });
+      return { results: [{ action_id: row.action_id, state: row.state, claimed_at: row.claimed_at }] };
+    }
     if (sql.startsWith("SELECT payload_json")) {
       const row = this.tally.get(args[0]);
       return { results: row?.state === "pending" ? [{ payload_json: row.payload_json }] : [] };
@@ -263,6 +318,24 @@ function mcpRequest(body, authenticated = true) {
 
 function toolCall(id, name, args = {}) {
   return { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } };
+}
+
+async function mcpValue(env, id, name, args) {
+  const response = await (await callMcp(toolCall(id, name, args), env)).json();
+  if (response.error) throw new Error(response.error.message);
+  return JSON.parse(response.result.content[0].text);
+}
+
+async function createRegistryAction(env, overrides = {}) {
+  return mcpValue(env, 100, "belloria_create_external_action", {
+    source_type: "telegram_command",
+    source_id: "7001",
+    action_type: "gmail.send",
+    target: { recipients: ["camille@example.test"], account: "belloria" },
+    payload: { text: "Bonjour Camille", subject: "Votre demande" },
+    expires_in_minutes: 10,
+    ...overrides
+  });
 }
 
 test("extracts only supported private command shapes", () => {
@@ -399,13 +472,134 @@ test("exposes provider-neutral Belloria tools after OAuth validation", async () 
   assert.deepEqual(response.result.tools.map((tool) => tool.name), [
     "belloria_channel_status", "belloria_list_commands", "belloria_list_tally_submissions",
     "belloria_get_tally_submission_fallback", "belloria_complete_tally_submission", "belloria_complete_command",
-    "belloria_refresh_fast_snapshots", "belloria_propose_action",
+    "belloria_refresh_fast_snapshots", "belloria_create_external_action", "belloria_present_external_action",
+    "belloria_get_external_action", "belloria_claim_external_action", "belloria_propose_action",
     "belloria_consume_approved_action", "belloria_send_text"
   ]);
   assert.equal(JSON.stringify(response).includes("123456"), false);
 
   const status = await (await callMcp(toolCall(2, "belloria_channel_status"), env)).json();
   assert.deepEqual(JSON.parse(status.result.content[0].text), { provider: "telegram", configured: true, voice_transcription: true });
+});
+
+test("creates an immutable external action from one persisted source and rejects altered replays", async () => {
+  const env = environment();
+  await handleRequest(telegramRequest(textUpdate()), env);
+
+  const created = await createRegistryAction(env);
+  assert.equal(created.created, true);
+  assert.match(created.action_id, /^[0-9a-f-]{36}$/);
+  assert.equal(env.DB.externalActions.size, 1);
+  const row = env.DB.externalActions.get(created.action_id);
+  assert.equal(row.source_type, "telegram_command");
+  assert.equal(row.source_id, "7001");
+  assert.equal(row.target_json, '{"account":"belloria","recipients":["camille@example.test"]}');
+  assert.equal(row.payload_json, '{"subject":"Votre demande","text":"Bonjour Camille"}');
+  assert.match(row.content_hash, /^[0-9a-f]{64}$/);
+
+  const replay = await createRegistryAction(env, {
+    target: { account: "belloria", recipients: ["camille@example.test"] },
+    payload: { subject: "Votre demande", text: "Bonjour Camille" }
+  });
+  assert.deepEqual(replay, { created: false, action_id: created.action_id, state: "pending", expires_at: row.expires_at });
+  assert.equal(env.DB.externalActions.size, 1);
+
+  const conflict = await (await callMcp(toolCall(101, "belloria_create_external_action", {
+    source_type: "telegram_command", source_id: "7001", action_type: "gmail.send",
+    target: { account: "belloria", recipients: ["camille@example.test"] },
+    payload: { subject: "Votre demande", text: "Texte différent" }
+  }), env)).json();
+  assert.equal(conflict.error.message, "idempotency_conflict");
+  assert.equal(env.DB.externalActions.size, 1);
+  assert.equal(env.DB.externalActions.get(created.action_id).payload_json, row.payload_json);
+
+  const missing = await (await callMcp(toolCall(102, "belloria_create_external_action", {
+    source_type: "telegram_command", source_id: "9999", action_type: "gmail.send", target: {}, payload: {}
+  }), env)).json();
+  assert.equal(missing.error.message, "source_id must identify an existing telegram command");
+});
+
+test("presents the persisted external action and approves it only from an allowlisted exact Telegram token", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), body: JSON.parse(options.body) });
+    return Response.json({ ok: true, result: { message_id: 501 } });
+  };
+  try {
+    const env = environment();
+    await handleRequest(telegramRequest(textUpdate()), env);
+    const created = await createRegistryAction(env);
+    const row = env.DB.externalActions.get(created.action_id);
+
+    const pendingClaim = await mcpValue(env, 103, "belloria_claim_external_action", { action_id: created.action_id });
+    assert.deepEqual(pendingClaim, { claimed: false, action_id: created.action_id });
+
+    const presented = await mcpValue(env, 104, "belloria_present_external_action", { action_id: created.action_id });
+    assert.deepEqual(presented, { found: true, presented: true, action_id: created.action_id, state: "pending", message_id: 501 });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://api.telegram.org/bottelegram-test-token/sendMessage");
+    assert.equal(calls[0].body.chat_id, "123456");
+    assert.match(calls[0].body.text, /Cible exacte : {"account":"belloria","recipients":\["camille@example\.test"\]}/);
+    assert.match(calls[0].body.text, new RegExp(`CONFIRMER ${row.confirmation_token}`));
+    assert.equal(calls.some((call) => /gmail\.googleapis\.com|api\.notion\.com/.test(call.url)), false);
+
+    const wrong = textUpdate({ update_id: 7003, message: { message_id: 83, chat: { id: 123456 }, text: "CONFIRMER ABCDEF123456" } });
+    await handleRequest(telegramRequest(wrong), env);
+    assert.equal(row.state, "pending");
+
+    const confirmation = textUpdate({ update_id: 7004, message: { message_id: 84, chat: { id: 123456 }, text: `CONFIRMER ${row.confirmation_token}` } });
+    await handleRequest(telegramRequest(confirmation), env);
+    assert.equal(row.state, "approved");
+    assert.equal(row.approval_command_id, "7004");
+    assert.equal(row.approval_message_id, "84");
+    assert.equal(row.approval_chat_id, "123456");
+    assert.equal(env.DB.rows.get("7004").state, "completed");
+    assert.equal(env.DB.rows.get("7004").content, null);
+
+    const duplicate = textUpdate({ update_id: 7005, message: { message_id: 85, chat: { id: 123456 }, text: `CONFIRMER ${row.confirmation_token}` } });
+    await handleRequest(telegramRequest(duplicate), env);
+    assert.equal(row.state, "approved");
+    assert.equal(row.approval_command_id, "7004");
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("expires a pending external action and allows exactly one concurrent claim after approval", async () => {
+  const env = environment();
+  await handleRequest(telegramRequest(textUpdate()), env);
+  const expired = await createRegistryAction(env);
+  const expiredRow = env.DB.externalActions.get(expired.action_id);
+  expiredRow.expires_at = "2020-01-01T00:00:00Z";
+  const expiredConfirmation = textUpdate({ update_id: 7006, message: { message_id: 86, chat: { id: 123456 }, text: `CONFIRMER ${expiredRow.confirmation_token}` } });
+  await handleRequest(telegramRequest(expiredConfirmation), env);
+  assert.equal(expiredRow.state, "expired");
+  assert.equal(expiredRow.approved_at, null);
+
+  const nextSource = textUpdate({ update_id: 7007, message: { message_id: 87, chat: { id: 123456 }, text: "Prépare une nouvelle action" } });
+  await handleRequest(telegramRequest(nextSource), env);
+  const action = await createRegistryAction(env, { source_id: "7007", target: { account: "belloria", recipients: ["louise@example.test"] } });
+  const row = env.DB.externalActions.get(action.action_id);
+  Object.assign(row, {
+    presentation_message_id: "502", presentation_chat_id: "123456", presented_at: new Date().toISOString()
+  });
+  const confirmation = textUpdate({ update_id: 7008, message: { message_id: 88, chat: { id: 123456 }, text: `CONFIRMER ${row.confirmation_token}` } });
+  await handleRequest(telegramRequest(confirmation), env);
+  assert.equal(row.state, "approved");
+
+  const claims = await Promise.all([
+    mcpValue(env, 105, "belloria_claim_external_action", { action_id: action.action_id }),
+    mcpValue(env, 106, "belloria_claim_external_action", { action_id: action.action_id })
+  ]);
+  assert.equal(claims.filter((claim) => claim.claimed).length, 1);
+  assert.equal(row.state, "claimed");
+  const replay = await mcpValue(env, 107, "belloria_claim_external_action", { action_id: action.action_id });
+  assert.deepEqual(replay, { claimed: false, action_id: action.action_id });
+
+  const read = await mcpValue(env, 108, "belloria_get_external_action", { action_id: action.action_id });
+  assert.deepEqual(read.action.payload, { subject: "Votre demande", text: "Bonjour Camille" });
+  assert.deepEqual(read.action.source, { type: "telegram_command", id: "7007" });
+  assert.match(read.action.approval_text, /Contenu exact : {"subject":"Votre demande","text":"Bonjour Camille"}/);
+  assert.equal(read.action.state, "claimed");
 });
 
 test("authenticates, filters and deduplicates direct Tally webhooks", async () => {

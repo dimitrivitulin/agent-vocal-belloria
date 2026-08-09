@@ -1,36 +1,40 @@
-# BELL-046 — Conception des Actions GPT idempotentes
+# BELL-046 — Registre d’actions externes et approbation durable
 
 Statut: completed
 Branche: `codex/bell-046-gpt-actions-idempotence`
-Dernière mise à jour: 2026-08-09
+Dernière mise à jour: 2026-08-10
 
 ## Objectif
 
-Définir une architecture minimale garantissant qu'une mutation Gmail ou Notion préparée par le GPT reste immuable, réellement approuvée, réclamée une seule fois localement et traçable jusque dans les résultats incertains.
+Livrer le registre D1 générique prêt à intégrer : création immuable, présentation et approbation Telegram, puis claim atomique. Aucun adaptateur Gmail ou Notion ne l’utilise encore.
 
 ## Contexte autorisé
 
-- Domaine : conception des Actions GPT, approbations Telegram et persistance D1.
-- Fichiers initiaux : `worker/src/gpt-actions.js`, approbations dans `worker/src/index.js`, migration `0003`, tests et documentation Actions GPT.
+- Domaine : code local Worker, D1 et confirmation Telegram.
+- Fichiers initiaux : `worker/src/index.js`, migrations D1, tests Worker/D1, ADR-009 et suivi projet.
 - Skill requis : aucun.
-- MCP ou connecteur requis : aucun ; aucun accès Gmail, Notion ou Telegram réel.
-- Hors périmètre : code applicatif, migration, déploiement, secret, donnée réelle et refactor du Worker.
+- MCP ou connecteur requis : aucun ; les tests doublent Telegram et n’appellent ni Gmail ni Notion.
+- Hors périmètre : `worker/src/gpt-actions.js`, OpenAPI, routes `confirmed: true`, Gmail, Notion, Brevo, WAHA/Meta, découpage du Worker et déploiement.
 
-## Décision
+## Décisions de lot
 
-- D1 portera une action externe immuable identifiée par `action_id`, `client_request_id` et une empreinte du contenu approuvé.
-- La confirmation humaine viendra du canal Telegram allowlisté et fera `pending → approved`, sans consommer l'action.
-- Un claim SQL atomique fera `approved → claimed`; succès, échec et résultat incertain seront persistés.
-- Gmail send et Notion create ne seront jamais rejoués automatiquement après un dispatch ambigu ; l'état `unknown` exigera réconciliation ou décision humaine.
-- Les écritures directes fondées uniquement sur `confirmed: true` seront remplacées dans un lot d'implémentation séparé.
+- Une action doit venir d’une source persistée ; BELL-046 autorise uniquement `telegram_command` dont `source_id` existe dans `telegram_commands`.
+- `creation_key` dérive de `source_type`, `source_id`, `action_type` et de la cible canonique. Même clé + contenu identique retrouve l’action ; contenu différent est un conflit.
+- Le Worker produit `action_id` et le jeton ; D1 stocke cible, payload, message de présentation et hash de contrôle de façon immuable.
+- La confirmation allowlistée réalise seulement `pending → approved`; le claim conditionnel réalise seulement `approved → claimed`.
+
+## Critères de sortie
+
+- Tests de création, rejet, expiration, présentation, confirmation, concurrence de claim et immuabilité réussis sans appel Gmail/Notion.
+- Diff contrôlé, suivi/ADR mis à jour et aucune route actuelle modifiée.
 
 ## Résultat
 
-- ADR-009 acceptée avec machine d'état, identité de l'effet, politique de panne et limites de garantie.
-- `PROJECT_CONTEXT.md` distingue désormais la cible validée de l'implémentation directe actuellement déployée.
-- BELL-047 porte l'implémentation future, sans Queue, framework, ORM, nouvelle base ni service supplémentaire.
+- `external_actions` est prêt à intégrer, avec source générique limitée à `telegram_command`, contenu immuable, preuve Telegram et claim conditionnel.
+- Les routes Actions GPT, OpenAPI, Gmail et Notion ne sont pas modifiés ; `confirmed: true` reste donc insuffisant jusqu’aux lots BELL-047/BELL-048.
 
 ## Validation
 
-- Documentation uniquement ; aucun code, test, schéma D1 ou service externe modifié.
-- `git diff --check` valide et diff limité au contexte, à la feuille de route, à la mémoire de lot et à l'ADR.
+- `npm.cmd run test:worker` : 39 tests réussis.
+- Tests D1/Python : 79 tests réussis via le runtime Python local.
+- `git diff --check` et examen du diff : périmètre limité au registre, aux tests et au suivi.

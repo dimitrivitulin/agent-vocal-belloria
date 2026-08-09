@@ -78,6 +78,64 @@ class D1MigrationTests(unittest.TestCase):
         ).fetchone()[0]
         self.assertEqual("2026-08-05 11:30:00", expiry)
 
+    def test_external_actions_schema_requires_a_persisted_source_and_enforces_immutable_transitions(self):
+        database = sqlite3.connect(":memory:")
+        for migration in ("0002_telegram_commands.sql", "0007_external_actions.sql"):
+            database.executescript(
+                (ROOT / "worker" / "migrations" / migration).read_text(encoding="utf-8")
+            )
+        database.execute(
+            "INSERT INTO telegram_commands (command_id, message_id, command_kind, content, state) VALUES (?, ?, ?, ?, ?)",
+            ("1", "1", "text", "Prépare", "pending"),
+        )
+        values = (
+            "action-1", "key-1", "telegram_command", "1", "gmail.send",
+            '{"recipients":["camille@example.test"]}', '{"subject":"Bonjour"}', "a" * 64,
+            "ABCDEF123456", "Action exacte\nCONFIRMER ABCDEF123456", "2099-01-01 00:00:00",
+        )
+        database.execute(
+            "INSERT INTO external_actions (action_id, creation_key, source_type, source_id, action_type, target_json, payload_json, content_hash, confirmation_token, approval_text, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            values,
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute(
+                "INSERT INTO external_actions (action_id, creation_key, source_type, source_id, action_type, target_json, payload_json, content_hash, confirmation_token, approval_text, expires_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ("action-2", "key-2", "telegram_command", "missing", "gmail.send", "{}", "{}", "b" * 64,
+                 "ABCDEF654321", "Action", "2099-01-01 00:00:00"),
+            )
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE external_actions SET payload_json = '{}' WHERE action_id = 'action-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute(
+                "UPDATE external_actions SET state = 'approved', approved_at = CURRENT_TIMESTAMP, approval_command_id = '2', "
+                "approval_message_id = '20', approval_chat_id = '123' WHERE action_id = 'action-1'"
+            )
+
+        database.execute(
+            "UPDATE external_actions SET presented_at = CURRENT_TIMESTAMP, presentation_message_id = '10', presentation_chat_id = '123' "
+            "WHERE action_id = 'action-1'"
+        )
+        approved = database.execute(
+            "UPDATE external_actions SET state = 'approved', approved_at = CURRENT_TIMESTAMP, approval_command_id = '2', "
+            "approval_message_id = '20', approval_chat_id = '123' "
+            "WHERE action_id = 'action-1' AND state = 'pending'"
+        )
+        self.assertEqual(1, approved.rowcount)
+        first_claim = database.execute(
+            "UPDATE external_actions SET state = 'claimed', claimed_at = CURRENT_TIMESTAMP "
+            "WHERE action_id = 'action-1' AND state = 'approved'"
+        )
+        second_claim = database.execute(
+            "UPDATE external_actions SET state = 'claimed', claimed_at = CURRENT_TIMESTAMP "
+            "WHERE action_id = 'action-1' AND state = 'approved'"
+        )
+        self.assertEqual(1, first_claim.rowcount)
+        self.assertEqual(0, second_claim.rowcount)
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE external_actions SET state = 'approved' WHERE action_id = 'action-1'")
+
 
 if __name__ == "__main__":
     unittest.main()

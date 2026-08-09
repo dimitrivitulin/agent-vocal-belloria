@@ -6,6 +6,8 @@ const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo";
 const FAST_SNAPSHOT_MAX_AGE_MINUTES = 120;
 const FAST_SNAPSHOT_LIMIT = 100;
 const SMS_TEXT_MAX_CHARS = 160;
+const EXTERNAL_ACTION_JSON_MAX_CHARS = 1400;
+const EXTERNAL_ACTION_EXPIRY_MAX_MINUTES = 60;
 
 const TOOLS = [
   {
@@ -113,6 +115,50 @@ const TOOLS = [
           required: ["content", "consequence"], additionalProperties: false
         }
       }
+    }
+  },
+  {
+    name: "belloria_create_external_action",
+    description: "Create one immutable external-action proposal from a persisted Telegram command. The same source, type and target is idempotent; altered content is rejected.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        source_type: { type: "string", const: "telegram_command" },
+        source_id: { type: "string", pattern: "^[0-9]{1,20}$" },
+        action_type: { type: "string", pattern: "^[a-z][a-z0-9._-]{0,63}$" },
+        target: { type: "object" },
+        payload: { type: "object" },
+        expires_in_minutes: { type: "integer", minimum: 1, maximum: EXTERNAL_ACTION_EXPIRY_MAX_MINUTES, default: 10 }
+      },
+      required: ["source_type", "source_id", "action_type", "target", "payload"],
+      additionalProperties: false
+    }
+  },
+  {
+    name: "belloria_present_external_action",
+    description: "Present the exact persisted action in the fixed private Telegram chat. It accepts only an action ID and records the Telegram message proof.",
+    inputSchema: {
+      type: "object",
+      properties: { action_id: { type: "string", pattern: "^[0-9a-f-]{36}$" } },
+      required: ["action_id"], additionalProperties: false
+    }
+  },
+  {
+    name: "belloria_get_external_action",
+    description: "Read one external action, its immutable content and its presentation, approval and claim status.",
+    inputSchema: {
+      type: "object",
+      properties: { action_id: { type: "string", pattern: "^[0-9a-f-]{36}$" } },
+      required: ["action_id"], additionalProperties: false
+    }
+  },
+  {
+    name: "belloria_claim_external_action",
+    description: "Atomically claim one approved external action. It accepts only an action ID and never receives action content.",
+    inputSchema: {
+      type: "object",
+      properties: { action_id: { type: "string", pattern: "^[0-9a-f-]{36}$" } },
+      required: ["action_id"], additionalProperties: false
     }
   },
   {
@@ -407,9 +453,10 @@ async function telegramWebhook(request, env, context) {
 
   const inserted = await storeTelegramCommand(env.DB, command);
   if (inserted) {
-    const work = command.kind === "voice" ? transcribeVoice(env, command) : processFastCommand(env, command);
-    if (context?.waitUntil) context.waitUntil(work);
-    else await work;
+    const approved = command.kind === "text" && await approveExternalActionFromTelegram(env, command);
+    const work = approved ? null : command.kind === "voice" ? transcribeVoice(env, command) : processFastCommand(env, command);
+    if (work && context?.waitUntil) context.waitUntil(work);
+    else if (work) await work;
   }
   console.log(JSON.stringify({ event: "telegram_webhook_ingested", accepted: inserted ? 1 : 0, kind: command.kind }));
   return json({ accepted: inserted ? 1 : 0 });
@@ -706,6 +753,167 @@ function requiredText(value, name, maximum) {
   return value.trim();
 }
 
+function requiredExternalActionId(value) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(value || ""))) throw new Error("action_id must be a UUID");
+  return String(value).toLowerCase();
+}
+
+function canonicalJson(value, name) {
+  const canonicalize = (item) => {
+    if (item === null || typeof item === "string" || typeof item === "boolean") return item;
+    if (typeof item === "number") {
+      if (!Number.isFinite(item)) throw new Error(`${name} must contain only JSON values`);
+      return item;
+    }
+    if (Array.isArray(item)) return item.map(canonicalize);
+    if (!item || typeof item !== "object" || Object.getPrototypeOf(item) !== Object.prototype) {
+      throw new Error(`${name} must be a JSON object`);
+    }
+    return Object.fromEntries(Object.keys(item).sort().map((key) => [key, canonicalize(item[key])]));
+  };
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${name} must be a JSON object`);
+  const result = JSON.stringify(canonicalize(value));
+  if (result.length > EXTERNAL_ACTION_JSON_MAX_CHARS) throw new Error(`${name} must serialize to at most ${EXTERNAL_ACTION_JSON_MAX_CHARS} characters`);
+  return result;
+}
+
+async function sha256Hex(value) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function externalActionToken() {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+function actionApprovalText({ actionType, targetJson, payloadJson, token }) {
+  const text = `Action externe : ${actionType}\nCible exacte : ${targetJson}\nContenu exact : ${payloadJson}\nPour approuver : CONFIRMER ${token}`;
+  if (text.length > TELEGRAM_TEXT_MAX_CHARS) throw new Error("external action approval text is too long for Telegram");
+  return text;
+}
+
+function externalActionView(row) {
+  return {
+    action_id: row.action_id,
+    source: { type: row.source_type, id: row.source_id },
+    action_type: row.action_type,
+    target: JSON.parse(row.target_json),
+    payload: JSON.parse(row.payload_json),
+    content_hash: row.content_hash,
+    approval_text: row.approval_text,
+    state: row.state,
+    created_at: row.created_at,
+    expires_at: row.expires_at,
+    presentation: row.presentation_message_id ? {
+      presented_at: row.presented_at,
+      message_id: row.presentation_message_id,
+      chat_id: row.presentation_chat_id
+    } : null,
+    approval: row.approved_at ? {
+      approved_at: row.approved_at,
+      command_id: row.approval_command_id,
+      message_id: row.approval_message_id,
+      chat_id: row.approval_chat_id
+    } : null,
+    claimed_at: row.claimed_at || null
+  };
+}
+
+async function readExternalAction(db, actionId) {
+  const result = await db.prepare("SELECT * FROM external_actions WHERE action_id = ?").bind(actionId).all();
+  return result.results?.[0] || null;
+}
+
+async function expireExternalAction(db, actionId) {
+  await db.prepare(
+    "UPDATE external_actions SET state = 'expired' WHERE action_id = ? AND state = 'pending' AND expires_at <= CURRENT_TIMESTAMP"
+  ).bind(actionId).run();
+}
+
+async function createExternalAction(env, args) {
+  const sourceType = String(args.source_type || "");
+  const sourceId = String(args.source_id || "");
+  const actionType = String(args.action_type || "");
+  const minutes = args.expires_in_minutes === undefined ? 10 : args.expires_in_minutes;
+  if (sourceType !== "telegram_command") throw new Error("source_type must be telegram_command");
+  if (!/^[0-9]{1,20}$/.test(sourceId)) throw new Error("source_id must contain 1 to 20 digits");
+  if (!/^[a-z][a-z0-9._-]{0,63}$/.test(actionType)) throw new Error("action_type must contain 1 to 64 lowercase safe characters");
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > EXTERNAL_ACTION_EXPIRY_MAX_MINUTES) {
+    throw new Error(`expires_in_minutes must be an integer from 1 to ${EXTERNAL_ACTION_EXPIRY_MAX_MINUTES}`);
+  }
+  const targetJson = canonicalJson(args.target, "target");
+  const payloadJson = canonicalJson(args.payload, "payload");
+  const creationKey = await sha256Hex(`${sourceType}\n${sourceId}\n${actionType}\n${targetJson}`);
+  const contentHash = await sha256Hex(`${actionType}\n${targetJson}\n${payloadJson}`);
+  const actionId = crypto.randomUUID();
+  const token = externalActionToken();
+  const approvalText = actionApprovalText({ actionType, targetJson, payloadJson, token });
+  const inserted = await env.DB.prepare(
+    "INSERT INTO external_actions (action_id, creation_key, source_type, source_id, action_type, target_json, payload_json, content_hash, confirmation_token, approval_text, expires_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?) WHERE EXISTS (SELECT 1 FROM telegram_commands WHERE command_id = ?) ON CONFLICT(creation_key) DO NOTHING"
+  ).bind(actionId, creationKey, sourceType, sourceId, actionType, targetJson, payloadJson, contentHash, token, approvalText, `+${minutes} minutes`, sourceId).run();
+  if (Number(inserted.meta?.changes || 0) === 1) {
+    return { created: true, action_id: actionId, state: "pending", expires_in_minutes: minutes };
+  }
+  const existing = (await env.DB.prepare("SELECT * FROM external_actions WHERE creation_key = ?").bind(creationKey).all()).results?.[0];
+  if (!existing) throw new Error("source_id must identify an existing telegram command");
+  if (existing.content_hash !== contentHash) throw new Error("idempotency_conflict");
+  return { created: false, action_id: existing.action_id, state: existing.state, expires_at: existing.expires_at };
+}
+
+async function presentExternalAction(env, suppliedActionId) {
+  const actionId = requiredExternalActionId(suppliedActionId);
+  await expireExternalAction(env.DB, actionId);
+  const row = await readExternalAction(env.DB, actionId);
+  if (!row) return { found: false, action_id: actionId };
+  if (row.presentation_message_id) return { found: true, presented: true, action_id: actionId, state: row.state };
+  if (row.state !== "pending") return { found: true, presented: false, action_id: actionId, state: row.state };
+  const sent = await sendText(env, row.approval_text);
+  const updated = await env.DB.prepare(
+    "UPDATE external_actions SET presented_at = CURRENT_TIMESTAMP, presentation_message_id = ?, presentation_chat_id = ? WHERE action_id = ? AND state = 'pending' AND presentation_message_id IS NULL"
+  ).bind(String(sent.message_id || ""), env.TELEGRAM_ALLOWED_CHAT_ID, actionId).run();
+  return { found: true, presented: Number(updated.meta?.changes || 0) === 1, action_id: actionId, state: "pending", message_id: sent.message_id || null };
+}
+
+async function getExternalAction(env, suppliedActionId) {
+  const actionId = requiredExternalActionId(suppliedActionId);
+  await expireExternalAction(env.DB, actionId);
+  const row = await readExternalAction(env.DB, actionId);
+  return row ? { found: true, action: externalActionView(row) } : { found: false, action_id: actionId };
+}
+
+export async function claimExternalAction(db, suppliedActionId) {
+  const actionId = requiredExternalActionId(suppliedActionId);
+  await expireExternalAction(db, actionId);
+  const result = await db.prepare(
+    "UPDATE external_actions SET state = 'claimed', claimed_at = CURRENT_TIMESTAMP WHERE action_id = ? AND state = 'approved' RETURNING action_id, state, claimed_at"
+  ).bind(actionId).all();
+  const row = result.results?.[0];
+  return row ? { claimed: true, action_id: row.action_id, state: row.state, claimed_at: row.claimed_at } : { claimed: false, action_id: actionId };
+}
+
+function confirmationToken(content) {
+  const match = /^CONFIRMER\s+([A-Z0-9]{12,64})\s*$/i.exec(String(content || ""));
+  return match ? match[1].toUpperCase() : null;
+}
+
+async function approveExternalActionFromTelegram(env, command) {
+  const token = confirmationToken(command.content);
+  if (!token) return false;
+  await env.DB.prepare(
+    "UPDATE external_actions SET state = 'expired' WHERE confirmation_token = ? AND state = 'pending' AND expires_at <= CURRENT_TIMESTAMP"
+  ).bind(token).run();
+  const result = await env.DB.prepare(
+    "UPDATE external_actions SET state = 'approved', approved_at = CURRENT_TIMESTAMP, approval_command_id = ?, approval_message_id = ?, approval_chat_id = ? WHERE confirmation_token = ? AND state = 'pending' AND expires_at > CURRENT_TIMESTAMP AND presentation_message_id IS NOT NULL RETURNING action_id"
+  ).bind(command.id, command.messageId, command.chatId, token).all();
+  if (!result.results?.[0]) return false;
+  await env.DB.prepare(
+    "UPDATE telegram_commands SET state = 'completed', content = NULL, updated_at = CURRENT_TIMESTAMP WHERE command_id = ? AND state = 'pending'"
+  ).bind(command.id).run();
+  return true;
+}
+
 async function proposeAction(env, args) {
   const commandId = String(args.command_id || "");
   const token = String(args.token || "").toUpperCase();
@@ -821,6 +1029,14 @@ async function mcp(request, env) {
     } else if (name === "belloria_complete_command") {
       if (args.confirmed !== true) throw new Error("explicit confirmation is required");
       value = await completeCommand(env, args.command_id || "");
+    } else if (name === "belloria_create_external_action") {
+      value = await createExternalAction(env, args);
+    } else if (name === "belloria_present_external_action") {
+      value = await presentExternalAction(env, args.action_id || "");
+    } else if (name === "belloria_get_external_action") {
+      value = await getExternalAction(env, args.action_id || "");
+    } else if (name === "belloria_claim_external_action") {
+      value = await claimExternalAction(env.DB, args.action_id || "");
     } else if (name === "belloria_propose_action") {
       value = await proposeAction(env, args);
     } else if (name === "belloria_consume_approved_action") {

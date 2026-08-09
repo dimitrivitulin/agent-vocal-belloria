@@ -14,19 +14,19 @@ Le mécanisme Telegram existant apporte un canal humain allowlisté, un jeton ex
 D1 reste l'unique persistance. Une action externe est créée avant confirmation avec :
 
 - un `action_id` généré par le Worker ;
-- un `client_request_id` unique pour dédupliquer la proposition ;
+- une origine persistée générique, `source_type` et `source_id` ; BELL-046 autorise uniquement `telegram_command` et exige un `command_id` D1 existant ;
+- une `creation_key` dérivée par le Worker de l'origine, du type d'action et de la cible canonique ;
 - un type, une cible et un payload canonique immuable ;
-- la conséquence, la référence prospect éventuelle et l'expiration ;
-- une empreinte SHA-256 de tous les éléments présentés à l'utilisateur ;
-- un jeton de confirmation dont seule l'empreinte est persistée.
+- une expiration, une empreinte SHA-256 du contenu canonique et un jeton de confirmation généré par le Worker ;
+- le texte exact présenté dans Telegram et les références du message présenté puis de la confirmation allowlistée.
 
-L'identité logique de l'effet est l'`action_id` lié au compte fournisseur, au type, à la cible et au payload canonique. Deux propositions volontairement identiques restent deux intentions distinctes ; un rejeu avec le même `client_request_id` doit retrouver la même action, et un contenu différent sous cette clé doit être refusé.
+Un UUID inventé par GPT n'est pas une clé de rejeu fiable : une réponse HTTP perdue peut conduire le modèle à générer une nouvelle valeur. Une action ne peut donc être créée que depuis une intention déjà persistée côté Belloria. Une même source ne produit qu'une action du même type vers la même cible : un rejeu au contenu identique retrouve l'action existante ; un payload différent sous cette même `creation_key` est refusé. Une seconde intention humaine exige une nouvelle source.
 
 La machine d'état minimale est :
 
 `pending → approved → claimed → succeeded`
 
-avec `failed_retryable`, `failed_terminal`, `unknown` et `expired` lorsque nécessaires. La confirmation Telegram fait uniquement `pending → approved`. L'exécution réclame atomiquement une action `approved` ou `failed_retryable`, puis persiste le début du dispatch et le résultat fournisseur.
+avec `failed`, `unknown` et `expired` préparés dans le schéma. La confirmation Telegram fait uniquement `pending → approved`, après preuve que le texte persisté a été présenté dans le chat allowlisté. L'exécution future réclamera atomiquement une action `approved`, puis persistera le début du dispatch et le résultat fournisseur.
 
 Un claim expiré sans début de dispatch peut être repris. Après un dispatch dont le résultat est ambigu, Gmail send et Notion create passent à `unknown` et ne sont jamais rejoués automatiquement. Notion update et archive peuvent être réconciliés ou rejoués seulement si la lecture de la ressource prouve que l'opération reste applicativement idempotente et qu'aucune modification concurrente ne contredit l'approbation.
 
@@ -34,7 +34,7 @@ L'endpoint d'exécution reçoit uniquement `action_id`. Il recharge le payload i
 
 ## Garanties et limites
 
-- D1 peut garantir localement une proposition unique, une approbation unique et un seul claim concurrent.
+- D1 garantit localement une proposition unique par origine/type/cible, un contenu immuable, une approbation Telegram liée à un message présenté et un seul claim concurrent.
 - Une action `succeeded` retourne son résultat persisté sans nouvel appel fournisseur.
 - Une action `unknown` exige une réconciliation ou une décision humaine ; elle n'est pas assimilée à un échec rejouable.
 - Un `Message-ID` Gmail déterministe ou une propriété technique Notion peut faciliter la réconciliation, sans constituer à lui seul une garantie fournisseur.
@@ -42,7 +42,7 @@ L'endpoint d'exécution reçoit uniquement `action_id`. Il recharge le payload i
 
 ## Conséquences
 
-- Les mutations directes protégées seulement par `confirmed: true` ne constituent pas la cible durable et devront être remplacées avant d'être considérées comme sûres au rejeu.
-- Une migration D1 et une évolution limitée des Actions GPT et de la confirmation Telegram seront nécessaires.
+- BELL-046 livre uniquement le registre et l'approbation durable prêts à intégrer. Les mutations directes protégées seulement par `confirmed: true` restent actives et ne sont pas corrigées par ce lot.
+- BELL-047 puis BELL-048 intégreront séparément Gmail et Notion en faisant recevoir à leurs exécuteurs le seul `action_id`.
 - Aucune Queue Cloudflare, aucun framework, ORM, service ou base supplémentaire n'est requis.
 - Les lectures Gmail/Notion restent hors de cette machine d'état.
