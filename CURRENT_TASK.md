@@ -1,40 +1,42 @@
-# BELL-046 — Registre d’actions externes et approbation durable
+# BELL-047.1 — Envoi Gmail durable
 
 Statut: completed
-Branche: `codex/bell-046-gpt-actions-idempotence`
+Branche: `codex/bell-047-gmail-durable-dispatch`
 Dernière mise à jour: 2026-08-10
 
 ## Objectif
 
-Livrer le registre D1 générique prêt à intégrer : création immuable, présentation et approbation Telegram, puis claim atomique. Aucun adaptateur Gmail ou Notion ne l’utilise encore.
+Raccorder uniquement l'envoi Gmail au registre BELL-046 : proposition issue d'une commande Telegram persistée, approbation durable, claim et dispatch Gmail à effet unique, puis résultat `succeeded`, `failed` ou `unknown`.
 
 ## Contexte autorisé
 
-- Domaine : code local Worker, D1 et confirmation Telegram.
-- Fichiers initiaux : `worker/src/index.js`, migrations D1, tests Worker/D1, ADR-009 et suivi projet.
+- Domaine : code local Worker, migration D1, OpenAPI et tests Worker/D1.
+- Fichiers initiaux : `worker/src/gpt-actions.js`, `worker/src/index.js`, migrations D1, tests Worker/D1 et suivi projet.
 - Skill requis : aucun.
-- MCP ou connecteur requis : aucun ; les tests doublent Telegram et n’appellent ni Gmail ni Notion.
-- Hors périmètre : `worker/src/gpt-actions.js`, OpenAPI, routes `confirmed: true`, Gmail, Notion, Brevo, WAHA/Meta, découpage du Worker et déploiement.
+- MCP ou connecteur requis : aucun ; les tests doublent Gmail et Telegram.
+- Hors périmètre : BELL-047.2/réconciliation, Notion, Brevo, WAHA/Meta, Queue, refactor général, déploiement.
 
 ## Décisions de lot
 
-- Une action doit venir d’une source persistée ; BELL-046 autorise uniquement `telegram_command` dont `source_id` existe dans `telegram_commands`.
-- `creation_key` dérive de `source_type`, `source_id`, `action_type` et de la cible canonique. Même clé + contenu identique retrouve l’action ; contenu différent est un conflit.
-- Le Worker produit `action_id` et le jeton ; D1 stocke cible, payload, message de présentation et hash de contrôle de façon immuable.
-- La confirmation allowlistée réalise seulement `pending → approved`; le claim conditionnel réalise seulement `approved → claimed`.
+- `gmail_send` exige `source_type=telegram_command` et un `source_id` persistant ; aucune source ChatGPT n'est ajoutée.
+- L'exécution accepte seulement `action_id` et relit le contenu canonique D1. `confirmed: true` n'autorise plus aucun envoi Gmail direct.
+- Le marqueur de corrélation `Message-ID` est déterministe mais ne sert à aucune réconciliation dans ce lot.
+- Après `dispatch_started_at`, tout résultat non explicitement rejeté par Gmail devient `unknown`, sans retry d'envoi.
 
 ## Critères de sortie
 
-- Tests de création, rejet, expiration, présentation, confirmation, concurrence de claim et immuabilité réussis sans appel Gmail/Notion.
-- Diff contrôlé, suivi/ADR mis à jour et aucune route actuelle modifiée.
+- Deux exécutions ou rejeux ne peuvent produire qu'un seul appel Gmail simulé.
+- Les résultats terminaux sont persistés ; `succeeded` et `unknown` ne rappellent jamais Gmail.
+- Les tests Worker/D1, le contrôle du diff et l'examen de périmètre réussissent.
 
 ## Résultat
 
-- `external_actions` est prêt à intégrer, avec source générique limitée à `telegram_command`, contenu immuable, preuve Telegram et claim conditionnel.
-- Les routes Actions GPT, OpenAPI, Gmail et Notion ne sont pas modifiés ; `confirmed: true` reste donc insuffisant jusqu’aux lots BELL-047/BELL-048.
+- `POST /gpt-actions/gmail/send` ne crée plus qu'une proposition durable et présentée Telegram ; `confirmed: true` est refusé comme champ Gmail non pris en charge.
+- `POST /gpt-actions/gmail/execute` accepte exclusivement `action_id`, réserve le dispatch avant l'unique appel Gmail et persiste les états terminaux immuables.
+- BELL-047.2 reste seul responsable de valider puis d'implémenter une éventuelle réconciliation par `Message-ID`.
 
 ## Validation
 
-- `npm.cmd run test:worker` : 39 tests réussis.
-- Tests D1/Python : 79 tests réussis via le runtime Python local.
-- `git diff --check` et examen du diff : périmètre limité au registre, aux tests et au suivi.
+- `npm.cmd run test:worker` : 43 tests réussis.
+- Tests D1/Python : 79 tests réussis avec le runtime Python local.
+- `git diff --check`, examen du diff et recherche des routes Gmail : réussis ; aucune modification Notion, Brevo, Queue ou WAHA/Meta.

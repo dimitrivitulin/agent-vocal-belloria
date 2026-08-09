@@ -817,7 +817,15 @@ function externalActionView(row) {
       message_id: row.approval_message_id,
       chat_id: row.approval_chat_id
     } : null,
-    claimed_at: row.claimed_at || null
+    claimed_at: row.claimed_at || null,
+    dispatch_started_at: row.dispatch_started_at || null,
+    result: row.finished_at ? {
+      finished_at: row.finished_at,
+      provider_message_id: row.provider_message_id || null,
+      provider_thread_id: row.provider_thread_id || null,
+      provider_http_status: row.provider_http_status || null,
+      provider_error_code: row.provider_error_code || null
+    } : null
   };
 }
 
@@ -860,6 +868,30 @@ async function createExternalAction(env, args) {
   if (!existing) throw new Error("source_id must identify an existing telegram command");
   if (existing.content_hash !== contentHash) throw new Error("idempotency_conflict");
   return { created: false, action_id: existing.action_id, state: existing.state, expires_at: existing.expires_at };
+}
+
+export async function proposeGmailExternalAction(env, args) {
+  const sourceId = String(args.source_id || "");
+  const target = { gmail_account: "primary", to: args.to, cc: args.cc };
+  const targetJson = canonicalJson(target, "target");
+  const creationKey = await sha256Hex(`telegram_command\n${sourceId}\ngmail_send\n${targetJson}`);
+  const proposal = await createExternalAction(env, {
+    source_type: "telegram_command",
+    source_id: sourceId,
+    action_type: "gmail_send",
+    target,
+    payload: {
+      subject: args.subject,
+      text: args.text,
+      rfc822_message_id: `<belloria-${creationKey}@belloria.invalid>`
+    }
+  });
+  const presentation = await presentExternalAction(env, proposal.action_id);
+  return {
+    ...proposal,
+    presented: presentation.presented,
+    presentation_message_id: presentation.message_id || null
+  };
 }
 
 async function presentExternalAction(env, suppliedActionId) {
@@ -1052,7 +1084,7 @@ async function mcp(request, env) {
 
 export async function handleRequest(request, env, context) {
   const path = new URL(request.url).pathname;
-  if (path.startsWith("/gpt-actions/")) return gptActions(request, env);
+  if (path.startsWith("/gpt-actions/")) return gptActions(request, env, { proposeGmailExternalAction, claimExternalAction });
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
   if (path === "/webhooks/tally") return tallyWebhook(request, env, context);

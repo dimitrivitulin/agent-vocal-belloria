@@ -5,7 +5,7 @@ Le GPT privé Belloria ne récupère pas les connecteurs personnels Gmail et Not
 ## Ce que le GPT peut faire
 
 - lire les métadonnées et extraits de messages Gmail via `searchRecentGmail` ;
-- rédiger et envoyer un email Gmail avec `sendGmailAfterConfirmation` ;
+- préparer une proposition Gmail durable avec `proposeGmailSend`, puis exécuter uniquement son `action_id` avec `executeApprovedGmailAction` après approbation Telegram ;
 - chercher, lire, créer, mettre à jour et archiver les fiches CRM Notion.
 
 Le schéma OpenAPI public est servi par `GET /gpt-actions/openapi.json`. Toutes les autres routes exigent `Authorization: Bearer <GPT_ACTIONS_TOKEN>`.
@@ -34,4 +34,4 @@ L'ajout d'une Action fait fonctionner ce GPT dans un mode compatible Actions plu
 
 ## Validation de sécurité
 
-Avant tout envoi Gmail ou changement CRM, le GPT affiche le destinataire ou la page concernée, le contenu/propriétés exacts et la conséquence, puis demande une réponse explicite. Il appelle seulement alors l'Action correspondante avec `confirmed: true`.
+Pour Gmail, le GPT ne crée une proposition que depuis un `source_id` de commande Telegram déjà persisté ; il n'invente jamais cette identité. Le Worker présente ensuite le contenu immuable dans le chat Telegram allowlisté. La confirmation Telegram, et non `confirmed: true`, autorise l'exécution Gmail avec le seul `action_id`. Les actions Notion conservent provisoirement leur contrat `confirmed: true` jusqu'à BELL-048.

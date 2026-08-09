@@ -61,9 +61,13 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   **Terminé lorsque** une action passe de `pending` à `approved` puis `claimed`, expire sans approbation et conserve la preuve locale du contenu présenté et de la confirmation.
   Migration `external_actions`, source générique limitée à `telegram_command`, contenu canonique immuable, token, preuves Telegram et tests de rejeu/concurrence livrés. Les routes Actions GPT existantes restent inchangées.
 
-- [ ] **BELL-047 — Intégration Gmail au registre d’actions** (`pending`)
-  Raccorder l'envoi Gmail au registre BELL-046 : création de proposition, exécuteur ne recevant que `action_id`, résultat certain ou `unknown` et réconciliation sans rejeu ambigu.
-  **Terminé lorsque** aucune mutation Gmail ne dépend plus seulement de `confirmed: true` et qu'un timeout fournisseur ne peut pas envoyer un doublon automatiquement.
+- [x] **BELL-047.1 — Envoi Gmail durable** (`completed`)
+  Remplacer l'envoi direct par une proposition `gmail_send` issue d'une commande Telegram persistée, approuvée dans Telegram et exécutée avec le seul `action_id`.
+  **Terminé lorsque** `confirmed: true` ne peut plus envoyer Gmail directement, un dispatch est réservé avant l'appel fournisseur et les résultats `succeeded`, `failed` ou `unknown` sont persistés sans rejeu ambigu.
+  Migration d'exécution, `Message-ID` de corrélation candidat, états terminaux immuables et tests de concurrence/rejeu livrés. BELL-047.2 reste nécessaire avant toute réconciliation Gmail.
+
+- [ ] **BELL-047.2 — Réconciliation Gmail** (`pending`)
+  Valider d'abord en conditions contrôlées la conservation et la recherche du `Message-ID`, puis seulement concevoir la résolution des actions Gmail `unknown`, sans capacité de renvoi automatique.
 
 - [ ] **BELL-048 — Intégration Notion au registre d’actions** (`pending`)
   Raccorder les créations, mises à jour et archivages Notion au registre BELL-046, avec vérification de concurrence et traitement explicite des résultats incertains.

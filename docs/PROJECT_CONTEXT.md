@@ -37,6 +37,8 @@ Le volume attendu est faible : quelques demandes de devis par jour. Le système 
 
 Cette architecture reste susceptible d'évoluer après validation du prototype. Les décisions durables sont consignées dans `docs/decisions/`.
 
+Depuis BELL-047.1, l'envoi Gmail des Actions GPT passe par une proposition `gmail_send` issue d'une commande Telegram persistée, puis par un exécuteur recevant seulement `action_id`. D1 persiste le début du dispatch et les résultats `succeeded`, `failed` ou `unknown` sans rejeu ambigu. Le `Message-ID` est seulement un marqueur de corrélation candidat jusqu'à BELL-047.2. Les mutations Notion restent directes sur `confirmed: true` jusqu'à BELL-048.
+
 ## Flux principal envisagé
 
 1. Tally transmet les formulaires structurés au Worker ; Gmail qualifie séparément les emails directs et Mariages.net.

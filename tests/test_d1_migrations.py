@@ -80,7 +80,7 @@ class D1MigrationTests(unittest.TestCase):
 
     def test_external_actions_schema_requires_a_persisted_source_and_enforces_immutable_transitions(self):
         database = sqlite3.connect(":memory:")
-        for migration in ("0002_telegram_commands.sql", "0007_external_actions.sql"):
+        for migration in ("0002_telegram_commands.sql", "0007_external_actions.sql", "0008_gmail_external_action_execution.sql"):
             database.executescript(
                 (ROOT / "worker" / "migrations" / migration).read_text(encoding="utf-8")
             )
@@ -135,6 +135,28 @@ class D1MigrationTests(unittest.TestCase):
         self.assertEqual(0, second_claim.rowcount)
         with self.assertRaises(sqlite3.IntegrityError):
             database.execute("UPDATE external_actions SET state = 'approved' WHERE action_id = 'action-1'")
+        columns = {row[1] for row in database.execute("PRAGMA table_info(external_actions)")}
+        self.assertTrue(
+            {"dispatch_started_at", "finished_at", "provider_message_id", "provider_thread_id", "provider_http_status", "provider_error_code"}
+            <= columns
+        )
+        dispatched = database.execute(
+            "UPDATE external_actions SET dispatch_started_at = CURRENT_TIMESTAMP WHERE action_id = 'action-1' AND state = 'claimed'"
+        )
+        self.assertEqual(1, dispatched.rowcount)
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE external_actions SET dispatch_started_at = CURRENT_TIMESTAMP WHERE action_id = 'action-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute(
+                "UPDATE external_actions SET state = 'succeeded', finished_at = CURRENT_TIMESTAMP WHERE action_id = 'action-1'"
+            )
+        succeeded = database.execute(
+            "UPDATE external_actions SET state = 'succeeded', finished_at = CURRENT_TIMESTAMP, provider_message_id = 'gmail-1', "
+            "provider_thread_id = 'thread-1', provider_http_status = 200 WHERE action_id = 'action-1'"
+        )
+        self.assertEqual(1, succeeded.rowcount)
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE external_actions SET provider_message_id = 'other' WHERE action_id = 'action-1'")
 
 
 if __name__ == "__main__":

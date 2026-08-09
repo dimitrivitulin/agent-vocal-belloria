@@ -100,7 +100,8 @@ class FakeDb {
         action_id, creation_key, source_type, source_id, action_type, target_json, payload_json, content_hash, confirmation_token, approval_text,
         state: "pending", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
         presented_at: null, presentation_message_id: null, presentation_chat_id: null,
-        approved_at: null, approval_command_id: null, approval_message_id: null, approval_chat_id: null, claimed_at: null
+        approved_at: null, approval_command_id: null, approval_message_id: null, approval_chat_id: null, claimed_at: null,
+        dispatch_started_at: null, finished_at: null, provider_message_id: null, provider_thread_id: null, provider_http_status: null, provider_error_code: null
       });
       return { meta: { changes: 1 } };
     }
@@ -122,6 +123,45 @@ class FakeDb {
       const row = this.externalActions.get(actionId);
       if (!row || row.state !== "pending" || row.presentation_message_id !== null) return { meta: { changes: 0 } };
       Object.assign(row, { presented_at: new Date().toISOString(), presentation_message_id: messageId, presentation_chat_id: chatId });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE external_actions SET dispatch_started_at")) {
+      const [actionId] = args;
+      const row = this.externalActions.get(actionId);
+      if (!row || row.state !== "claimed" || row.dispatch_started_at !== null) return { meta: { changes: 0 } };
+      row.dispatch_started_at = new Date().toISOString();
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE external_actions SET state = 'succeeded'")) {
+      const [messageId, threadId, httpStatus, actionId] = args;
+      const row = this.externalActions.get(actionId);
+      if (!row || row.state !== "claimed" || !row.dispatch_started_at) return { meta: { changes: 0 } };
+      Object.assign(row, { state: "succeeded", finished_at: new Date().toISOString(), provider_message_id: messageId, provider_thread_id: threadId, provider_http_status: httpStatus });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE external_actions SET state = 'failed'")) {
+      const [errorCode, httpStatus, actionId] = args;
+      const row = this.externalActions.get(actionId);
+      const afterDispatch = sql.includes("dispatch_started_at IS NOT NULL");
+      if (!row || row.state !== "claimed" || Boolean(row.dispatch_started_at) !== afterDispatch) return { meta: { changes: 0 } };
+      Object.assign(row, { state: "failed", finished_at: new Date().toISOString(), provider_error_code: errorCode, provider_http_status: httpStatus });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE external_actions SET state = 'unknown'")) {
+      const staleOnly = sql.includes("gmail_dispatch_abandoned");
+      const actionId = staleOnly ? args[0] : args[2];
+      const row = this.externalActions.get(actionId);
+      if (!row || row.state !== "claimed" || !row.dispatch_started_at) return { meta: { changes: 0 } };
+      if (staleOnly && Date.parse(row.dispatch_started_at) > Date.now() - 2 * 60000) return { meta: { changes: 0 } };
+      Object.assign(row, {
+        state: "unknown", finished_at: new Date().toISOString(),
+        provider_error_code: staleOnly ? "gmail_dispatch_abandoned" : args[0],
+        provider_http_status: staleOnly ? null : args[1]
+      });
       return { meta: { changes: 1 } };
     }
 
@@ -336,6 +376,30 @@ async function createRegistryAction(env, overrides = {}) {
     expires_in_minutes: 10,
     ...overrides
   });
+}
+
+function gmailActionRequest(path, body) {
+  return new Request(`https://worker.test/gpt-actions/gmail/${path}`, {
+    method: "POST",
+    headers: { authorization: "Bearer action-secret", "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+async function createApprovedGmailAction(env, overrides = {}) {
+  await handleRequest(telegramRequest(textUpdate()), env);
+  const proposed = await handleRequest(gmailActionRequest("send", {
+    source_id: "7001", to: "camille@example.test", subject: "Votre demande", text: "Bonjour Camille", ...overrides
+  }), env);
+  assert.equal(proposed.status, 201);
+  const action = await proposed.json();
+  const token = env.DB.externalActions.get(action.action_id).confirmation_token;
+  await handleRequest(telegramRequest(textUpdate({
+    update_id: 7002,
+    message: { message_id: 82, chat: { id: 123456 }, text: `CONFIRMER ${token}` }
+  })), env);
+  assert.equal(env.DB.externalActions.get(action.action_id).state, "approved");
+  return action;
 }
 
 test("extracts only supported private command shapes", () => {
@@ -1091,22 +1155,166 @@ test("reads Gmail metadata through the private Action without sending mail", asy
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("sends Gmail only after the exact email has been explicitly confirmed", async () => {
+test("creates and presents an immutable Gmail proposal without any confirmed direct-send path", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, options = {}) => {
     calls.push({ url: String(url), options });
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 501 } });
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const env = environment({ GPT_ACTIONS_TOKEN: "action-secret" });
+    await handleRequest(telegramRequest(textUpdate()), env);
+
+    const legacy = await handleRequest(gmailActionRequest("send", {
+      to: "camille@example.test", subject: "Votre demande", text: "Bonjour Camille", confirmed: true
+    }), env);
+    assert.equal(legacy.status, 400);
+
+    const proposed = await handleRequest(gmailActionRequest("send", {
+      source_id: "7001", to: ["Camille@example.test"], cc: [], subject: "Votre demande", text: "Bonjour Camille"
+    }), env);
+    assert.equal(proposed.status, 201);
+    const action = await proposed.json();
+    const row = env.DB.externalActions.get(action.action_id);
+    assert.equal(row.action_type, "gmail_send");
+    assert.equal(row.state, "pending");
+    assert.match(row.payload_json, /"rfc822_message_id":"<belloria-[0-9a-f]{64}@belloria\.invalid>"/);
+    assert.match(row.approval_text, /"gmail_account":"primary"/);
+
+    const replay = await handleRequest(gmailActionRequest("send", {
+      source_id: "7001", to: "camille@example.test", subject: "Votre demande", text: "Bonjour Camille"
+    }), env);
+    assert.equal(replay.status, 201);
+    const conflict = await handleRequest(gmailActionRequest("send", {
+      source_id: "7001", to: "camille@example.test", subject: "Votre demande", text: "Texte différent"
+    }), env);
+    assert.equal(conflict.status, 409);
+
+    const injected = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id, to: "attacker@example.test" }), env);
+    assert.equal(injected.status, 400);
+    const unapproved = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env);
+    assert.equal(unapproved.status, 409);
+    assert.equal(calls.filter((call) => String(call.url).endsWith("/messages/send")).length, 0);
+    assert.equal(calls.filter((call) => String(call.url).endsWith("/sendMessage")).length, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("claims concurrent approved Gmail executions once and replays the persisted success", async () => {
+  const originalFetch = globalThis.fetch;
+  const gmailCalls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 502 } });
     if (String(url) === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "access-token", scope: "https://www.googleapis.com/auth/gmail.send" });
-    if (String(url).endsWith("/messages/send")) return Response.json({ id: "sent-1", threadId: "thread-1" });
+    if (String(url).endsWith("/messages/send")) {
+      gmailCalls.push(JSON.parse(options.body));
+      return Response.json({ id: "sent-1", threadId: "thread-1" });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   };
   try {
     const env = environment({ GPT_ACTIONS_TOKEN: "action-secret", GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh" });
-    const denied = await handleRequest(new Request("https://worker.test/gpt-actions/gmail/send", { method: "POST", headers: { authorization: "Bearer action-secret", "content-type": "application/json" }, body: JSON.stringify({ to: "camille@example.test", subject: "Votre demande", text: "Bonjour Camille" }) }), env);
-    assert.equal(denied.status, 409);
-    const allowed = await handleRequest(new Request("https://worker.test/gpt-actions/gmail/send", { method: "POST", headers: { authorization: "Bearer action-secret", "content-type": "application/json" }, body: JSON.stringify({ to: "camille@example.test", subject: "Votre demande", text: "Bonjour Camille", confirmed: true }) }), env);
-    assert.deepEqual(await allowed.json(), { sent: true, id: "sent-1", thread_id: "thread-1", recipients: ["camille@example.test"], subject: "Votre demande" });
-    assert.equal(calls.filter((call) => String(call.url).endsWith("/messages/send")).length, 1);
+    const action = await createApprovedGmailAction(env);
+    const [first, second] = await Promise.all([
+      handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env),
+      handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env)
+    ]);
+    await first.json();
+    await second.json();
+    assert.equal(gmailCalls.length, 1);
+    const mime = Buffer.from(gmailCalls[0].raw.replaceAll("-", "+").replaceAll("_", "/"), "base64").toString("utf8");
+    const row = env.DB.externalActions.get(action.action_id);
+    assert.match(mime, new RegExp(`Message-ID: ${JSON.parse(row.payload_json).rfc822_message_id.replace(/[<>]/g, "\\$&")}`));
+    assert.match(mime, /To: camille@example\.test/);
+    assert.equal(row.state, "succeeded");
+    assert.equal(row.provider_message_id, "sent-1");
+
+    const replay = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env);
+    assert.deepEqual(await replay.json(), { action_id: action.action_id, state: "succeeded", sent: true, id: "sent-1", thread_id: "thread-1" });
+    assert.equal(gmailCalls.length, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("persists an explicit Gmail rejection as failed without a retry", async () => {
+  const originalFetch = globalThis.fetch;
+  let gmailCalls = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 503 } });
+    if (String(url) === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "access-token", scope: "https://www.googleapis.com/auth/gmail.send" });
+    if (String(url).endsWith("/messages/send")) {
+      gmailCalls += 1;
+      return Response.json({ error: { status: "INVALID_ARGUMENT", errors: [{ reason: "invalidArgument" }] } }, { status: 400 });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const env = environment({ GPT_ACTIONS_TOKEN: "action-secret", GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh" });
+    const action = await createApprovedGmailAction(env);
+    const failed = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env);
+    assert.deepEqual(await failed.json(), { action_id: action.action_id, state: "failed", error_code: "gmail_rejected_invalid_argument", provider_http_status: 400 });
+    const replay = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env);
+    assert.equal((await replay.json()).state, "failed");
+    assert.equal(gmailCalls, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("persists pre-dispatch failures and ambiguous Gmail outcomes without a retry", async () => {
+  const originalFetch = globalThis.fetch;
+  let gmailCalls = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 504 } });
+    if (String(url).endsWith("/messages/send")) {
+      gmailCalls += 1;
+      throw new Error("connection lost after dispatch");
+    }
+    if (String(url) === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "access-token", scope: "https://www.googleapis.com/auth/gmail.send" });
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const missingConfig = environment({ GPT_ACTIONS_TOKEN: "action-secret" });
+    const failedAction = await createApprovedGmailAction(missingConfig);
+    const failed = await handleRequest(gmailActionRequest("execute", { action_id: failedAction.action_id }), missingConfig);
+    assert.deepEqual(await failed.json(), { action_id: failedAction.action_id, state: "failed", error_code: "gmail_not_configured", provider_http_status: null });
+
+    const env = environment({ GPT_ACTIONS_TOKEN: "action-secret", GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh" });
+    const action = await createApprovedGmailAction(env);
+    const unknown = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env);
+    assert.deepEqual(await unknown.json(), { action_id: action.action_id, state: "unknown", error_code: "gmail_network_ambiguous", provider_http_status: null });
+    const replay = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), env);
+    assert.equal((await replay.json()).state, "unknown");
+    assert.equal(gmailCalls, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("resumes only a claimed Gmail action that has no dispatch marker", async () => {
+  const originalFetch = globalThis.fetch;
+  let gmailCalls = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 505 } });
+    if (String(url) === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "access-token", scope: "https://www.googleapis.com/auth/gmail.send" });
+    if (String(url).endsWith("/messages/send")) {
+      gmailCalls += 1;
+      return Response.json({ id: "sent-after-claim" });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const resumable = environment({ GPT_ACTIONS_TOKEN: "action-secret", GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh" });
+    const action = await createApprovedGmailAction(resumable);
+    Object.assign(resumable.DB.externalActions.get(action.action_id), { state: "claimed", claimed_at: new Date().toISOString() });
+    const resumed = await handleRequest(gmailActionRequest("execute", { action_id: action.action_id }), resumable);
+    assert.equal((await resumed.json()).state, "succeeded");
+    assert.equal(gmailCalls, 1);
+
+    const stale = environment({ GPT_ACTIONS_TOKEN: "action-secret", GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh" });
+    const staleAction = await createApprovedGmailAction(stale);
+    Object.assign(stale.DB.externalActions.get(staleAction.action_id), {
+      state: "claimed", claimed_at: "2020-01-01T00:00:00.000Z", dispatch_started_at: "2020-01-01T00:00:00.000Z"
+    });
+    const abandoned = await handleRequest(gmailActionRequest("execute", { action_id: staleAction.action_id }), stale);
+    assert.deepEqual(await abandoned.json(), { action_id: staleAction.action_id, state: "unknown", error_code: "gmail_dispatch_abandoned", provider_http_status: null });
+    assert.equal(gmailCalls, 1);
   } finally { globalThis.fetch = originalFetch; }
 });
 
