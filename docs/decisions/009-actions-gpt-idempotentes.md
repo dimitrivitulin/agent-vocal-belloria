@@ -46,4 +46,3 @@ L'endpoint d'exécution reçoit uniquement `action_id`. Il recharge le payload i
 - Une migration D1 et une évolution limitée des Actions GPT et de la confirmation Telegram seront nécessaires.
 - Aucune Queue Cloudflare, aucun framework, ORM, service ou base supplémentaire n'est requis.
 - Les lectures Gmail/Notion restent hors de cette machine d'état.
-
