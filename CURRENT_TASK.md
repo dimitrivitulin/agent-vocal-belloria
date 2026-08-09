@@ -1,38 +1,36 @@
-# BELL-045 — Transitions SMS Brevo monotones
+# BELL-046 — Conception des Actions GPT idempotentes
 
 Statut: completed
-Branche: `codex/bell-045-brevo-sms-status`
+Branche: `codex/bell-046-gpt-actions-idempotence`
 Dernière mise à jour: 2026-08-09
 
 ## Objectif
 
-Empêcher les callbacks Brevo tardifs ou répétés de faire régresser l'état SMS conservé dans D1.
+Définir une architecture minimale garantissant qu'une mutation Gmail ou Notion préparée par le GPT reste immuable, réellement approuvée, réclamée une seule fois localement et traçable jusque dans les résultats incertains.
 
 ## Contexte autorisé
 
-- Domaine : callbacks SMS Brevo et suivi D1 des soumissions Tally.
-- Fichiers initiaux : `worker/src/index.js`, `worker/test/worker.test.js`, `docs/tally-sms-ack.md`, suivi du lot.
+- Domaine : conception des Actions GPT, approbations Telegram et persistance D1.
+- Fichiers initiaux : `worker/src/gpt-actions.js`, approbations dans `worker/src/index.js`, migration `0003`, tests et documentation Actions GPT.
 - Skill requis : aucun.
-- MCP ou connecteur requis : aucun ; aucun appel Brevo réel.
-- Hors périmètre : refactor Worker, migrations, Telegram, Tally hors rapprochement du callback, MCP, OAuth, Actions GPT, WAHA/Meta, déploiement.
+- MCP ou connecteur requis : aucun ; aucun accès Gmail, Notion ou Telegram réel.
+- Hors périmètre : code applicatif, migration, déploiement, secret, donnée réelle et refactor du Worker.
 
-## Périmètre
+## Décision
 
-- Rendre les transitions SQL monotones pour les rapprochements par `messageId` et tag Tally.
-- Faire de `delivered` un état terminal et traiter les callbacks identiques comme de vrais no-op.
-- Couvrir les transitions autorisées, refusées, répétées et les deux chemins de rapprochement.
-- Documenter la politique des états d'échec.
+- D1 portera une action externe immuable identifiée par `action_id`, `client_request_id` et une empreinte du contenu approuvé.
+- La confirmation humaine viendra du canal Telegram allowlisté et fera `pending → approved`, sans consommer l'action.
+- Un claim SQL atomique fera `approved → claimed`; succès, échec et résultat incertain seront persistés.
+- Gmail send et Notion create ne seront jamais rejoués automatiquement après un dispatch ambigu ; l'état `unknown` exigera réconciliation ou décision humaine.
+- Les écritures directes fondées uniquement sur `confirmed: true` seront remplacées dans un lot d'implémentation séparé.
 
-## Critères de réussite
+## Résultat
 
-- `pending → accepted → delivered` fonctionne.
-- `failed` ne régresse pas vers `accepted`, mais peut devenir `delivered`.
-- `delivered` ne change plus et un no-op ne modifie pas `sms_updated_at`.
-- Les tests Worker et `git diff --check` réussissent sans changement hors périmètre.
+- ADR-009 acceptée avec machine d'état, identité de l'effet, politique de panne et limites de garantie.
+- `PROJECT_CONTEXT.md` distingue désormais la cible validée de l'implémentation directe actuellement déployée.
+- BELL-047 porte l'implémentation future, sans Queue, framework, ORM, nouvelle base ni service supplémentaire.
 
 ## Validation
 
-- Tests Worker : 36 réussis le 2026-08-09.
-- Les rapprochements par `messageId` et tag Tally appliquent la même progression monotone ; le tag précoce reste limité à `pending`.
-- Les callbacks identiques ou régressifs retournent `accepted: 0` sans modifier `sms_status` ni `sms_updated_at`.
-- Aucune migration ni intégration hors Brevo/Tally n'a été modifiée.
+- Documentation uniquement ; aucun code, test, schéma D1 ou service externe modifié.
+- `git diff --check` valide et diff limité au contexte, à la feuille de route, à la mémoire de lot et à l'ADR.

@@ -56,6 +56,15 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [x] **BELL-046 — Conception des Actions GPT idempotentes** (`completed`)
+  Définir l'identité immuable, la confirmation humaine, la machine d'état D1 et la gestion honnête des résultats externes incertains pour Gmail et Notion.
+  **Terminé lorsque** les garanties locales, les limites fournisseur, les scénarios de panne et la frontière avec le mécanisme Telegram sont consignés dans une décision durable.
+  ADR-009 acceptée : proposition dédupliquée, approbation Telegram sans consommation préalable, claim atomique, états de résultat dont `unknown`, et aucun rejeu automatique d'un dispatch ambigu.
+
+- [ ] **BELL-047 — Actions GPT confirmées, idempotentes et traçables** (`pending`)
+  Remplacer les mutations directes fondées sur `confirmed: true` par des actions immuables persistées dans D1, approuvées via Telegram, réclamées atomiquement et suivies jusqu'à un résultat certain ou `unknown`.
+  **Terminé lorsque** un rejeu ou deux appels concurrents ne produisent qu'un seul dispatch local, que le contenu exécuté est celui approuvé et qu'aucun résultat Gmail/Notion ambigu n'est rejoué automatiquement.
+
 - [x] **BELL-045 — Transitions SMS Brevo monotones** (`completed`)
   Empêcher les callbacks Brevo tardifs ou répétés de faire régresser l'état SMS D1, en conservant les rapprochements par `messageId` et tag Tally.
   **Terminé lorsque** `delivered` est terminal, les échecs suivent une politique explicite, les transitions refusées sont des no-op SQL et tous les scénarios de rejeu sont couverts par les tests Worker.
