@@ -1,6 +1,6 @@
 # BELL-048 — Intégration Notion au registre d’actions
 
-Statut: ready_for_review
+Statut: blocked
 Branche: `codex/bell-048-notion-action-registry`
 Dernière mise à jour: 2026-08-12
 
@@ -13,7 +13,7 @@ Raccorder les créations, mises à jour et archivages Notion des Actions GPT au 
 - Domaine : code local Worker, migration D1, contrat OpenAPI et tests Worker/D1.
 - Fichiers initiaux : routes Actions GPT, registre `external_actions`, migrations D1 et tests associés.
 - Skill requis : aucun au démarrage.
-- MCP ou connecteur requis : aucun au démarrage ; les tests doublent Notion et Telegram. Un accès Notion en lecture ne sera envisagé que pour une validation ultérieure nécessaire.
+- MCP ou connecteur requis : configuration Cloudflare et CLI Wrangler pour appliquer la migration D1 et déployer ; les tests doublent Notion et Telegram. Un accès Notion en lecture ne sera envisagé que pour une validation ultérieure nécessaire.
 - Hors périmètre : BELL-047.2/047.3, OAuth Google, envoi Gmail, modifications réelles du CRM Notion, Brevo, Tally, WAHA/Meta et refactor général.
 
 ## Critères de sortie
@@ -24,7 +24,7 @@ Raccorder les créations, mises à jour et archivages Notion des Actions GPT au 
 
 ## Garde de sécurité
 
-- Aucun appel Notion réel, aucune mutation CRM et aucun déploiement ne sont autorisés sans demande explicite.
+- L’autorisation explicite du 2026-08-12 couvre l’application de la migration D1 et le déploiement Worker ; aucune mutation CRM Notion réelle ne sera exécutée.
 - Les contenus de mutation validés restent immuables entre leur présentation Telegram et leur exécution.
 
 ## État initial
@@ -35,7 +35,7 @@ Raccorder les créations, mises à jour et archivages Notion des Actions GPT au 
 
 ## Prochaine action
 
-- Appliquer la migration D1 et déployer le Worker après revue explicite, puis effectuer une validation contrôlée sans mutation CRM réelle avant toute utilisation opérationnelle.
+- Rétablir une authentification Cloudflare utilisable par Wrangler (jeton API local non versionné ou connexion CLI explicitement autorisée), puis appliquer `0009` et déployer sans exécuter de mutation CRM Notion réelle.
 
 ## Résultat
 
@@ -48,3 +48,4 @@ Raccorder les créations, mises à jour et archivages Notion des Actions GPT au 
 - `npm.cmd run test:worker` : 47 tests réussis.
 - Runtime Python fourni par Codex : 79 tests réussis, dont les migrations D1.
 - Aucun appel Notion réel, aucune mutation CRM et aucun déploiement effectués.
+- Wrangler ne reçoit aucun `CLOUDFLARE_API_TOKEN` dans son environnement non interactif ; aucune migration D1 ni aucun déploiement n’a donc démarré.
