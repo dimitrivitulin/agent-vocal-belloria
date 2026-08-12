@@ -894,6 +894,22 @@ export async function proposeGmailExternalAction(env, args) {
   };
 }
 
+export async function proposeNotionExternalAction(env, args) {
+  const proposal = await createExternalAction(env, {
+    source_type: "telegram_command",
+    source_id: args.source_id,
+    action_type: args.action_type,
+    target: args.target,
+    payload: args.payload
+  });
+  const presentation = await presentExternalAction(env, proposal.action_id);
+  return {
+    ...proposal,
+    presented: presentation.presented,
+    presentation_message_id: presentation.message_id || null
+  };
+}
+
 async function presentExternalAction(env, suppliedActionId) {
   const actionId = requiredExternalActionId(suppliedActionId);
   await expireExternalAction(env.DB, actionId);
@@ -1084,7 +1100,7 @@ async function mcp(request, env) {
 
 export async function handleRequest(request, env, context) {
   const path = new URL(request.url).pathname;
-  if (path.startsWith("/gpt-actions/")) return gptActions(request, env, { proposeGmailExternalAction, claimExternalAction });
+  if (path.startsWith("/gpt-actions/")) return gptActions(request, env, { proposeGmailExternalAction, proposeNotionExternalAction, claimExternalAction });
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
   if (path === "/webhooks/tally") return tallyWebhook(request, env, context);

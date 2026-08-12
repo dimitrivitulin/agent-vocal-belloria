@@ -2,6 +2,11 @@ const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 const GMAIL_ACTION_TYPE = "gmail_send";
 const GMAIL_DISPATCH_STALE_MINUTES = 2;
+const NOTION_CREATE_ACTION_TYPE = "notion_page_create";
+const NOTION_UPDATE_ACTION_TYPE = "notion_page_update";
+const NOTION_ARCHIVE_ACTION_TYPE = "notion_page_archive";
+const NOTION_ACTION_TYPES = new Set([NOTION_CREATE_ACTION_TYPE, NOTION_UPDATE_ACTION_TYPE, NOTION_ARCHIVE_ACTION_TYPE]);
+const NOTION_DISPATCH_STALE_MINUTES = 2;
 const NOTION_VERSION = "2026-03-11";
 const MAX_QUERY_LENGTH = 256;
 
@@ -105,9 +110,14 @@ function gmailProposal(body) {
 function externalActionResult(row) {
   const result = { action_id: row.action_id, state: row.state };
   if (row.state === "succeeded") {
-    result.sent = true;
-    result.id = row.provider_message_id;
-    result.thread_id = row.provider_thread_id || null;
+    if (row.action_type === GMAIL_ACTION_TYPE) {
+      result.sent = true;
+      result.id = row.provider_message_id;
+      result.thread_id = row.provider_thread_id || null;
+    } else {
+      result.completed = true;
+      result.resource_id = row.provider_resource_id || null;
+    }
   }
   if (["failed", "unknown"].includes(row.state)) {
     result.error_code = row.provider_error_code || null;
@@ -160,14 +170,93 @@ function gmailMime(message) {
   ].filter((line) => line !== null).join("\r\n");
 }
 
-async function persistGmailFailure(db, actionId, errorCode, providerHttpStatus, afterDispatch) {
+function validNotionId(value) {
+  return /^[0-9a-f-]{32,36}$/i.test(String(value || ""));
+}
+
+function validNotionProperties(value) {
+  return validObject(value) && Object.keys(value).length > 0 && Object.keys(value).length <= 30;
+}
+
+function hasExactKeys(value, keys) {
+  return validObject(value) && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+}
+
+function notionProposal(body, operation, env) {
+  const sourceId = String(body.source_id || "");
+  if (!/^[0-9]{1,20}$/.test(sourceId)) return null;
+
+  if (operation === "create") {
+    if (!validNotionId(env.NOTION_DATA_SOURCE_ID) || !validNotionProperties(body.properties)) return null;
+    return {
+      source_id: sourceId,
+      action_type: NOTION_CREATE_ACTION_TYPE,
+      target: { notion_data_source_id: env.NOTION_DATA_SOURCE_ID },
+      payload: { properties: body.properties }
+    };
+  }
+
+  const pageId = String(body.page_id || "");
+  if (!validNotionId(pageId)) return null;
+  if (operation === "update") {
+    if (!validNotionProperties(body.properties)) return null;
+    return {
+      source_id: sourceId,
+      action_type: NOTION_UPDATE_ACTION_TYPE,
+      target: { page_id: pageId },
+      payload: { properties: body.properties }
+    };
+  }
+
+  return {
+    source_id: sourceId,
+    action_type: NOTION_ARCHIVE_ACTION_TYPE,
+    target: { page_id: pageId },
+    payload: { archived: true }
+  };
+}
+
+function storedNotionMutation(row) {
+  try {
+    const target = JSON.parse(row.target_json);
+    const payload = JSON.parse(row.payload_json);
+    if (row.action_type === NOTION_CREATE_ACTION_TYPE
+      && hasExactKeys(target, ["notion_data_source_id"])
+      && validNotionId(target.notion_data_source_id)
+      && hasExactKeys(payload, ["properties"])
+      && validNotionProperties(payload.properties)) {
+      return {
+        path: "/pages",
+        method: "POST",
+        body: { parent: { type: "data_source_id", data_source_id: target.notion_data_source_id }, properties: payload.properties }
+      };
+    }
+    if (row.action_type === NOTION_UPDATE_ACTION_TYPE
+      && hasExactKeys(target, ["page_id"])
+      && validNotionId(target.page_id)
+      && hasExactKeys(payload, ["properties"])
+      && validNotionProperties(payload.properties)) {
+      return { path: `/pages/${encodeURIComponent(target.page_id)}`, method: "PATCH", body: { properties: payload.properties } };
+    }
+    if (row.action_type === NOTION_ARCHIVE_ACTION_TYPE
+      && hasExactKeys(target, ["page_id"])
+      && validNotionId(target.page_id)
+      && hasExactKeys(payload, ["archived"])
+      && payload.archived === true) {
+      return { path: `/pages/${encodeURIComponent(target.page_id)}`, method: "PATCH", body: { archived: true } };
+    }
+  } catch { /* The immutable row cannot be executed if its content is malformed. */ }
+  return null;
+}
+
+async function persistExternalActionFailure(db, actionId, errorCode, providerHttpStatus, afterDispatch) {
   const result = await db.prepare(
     `UPDATE external_actions SET state = 'failed', finished_at = CURRENT_TIMESTAMP, provider_error_code = ?, provider_http_status = ? WHERE action_id = ? AND state = 'claimed' AND dispatch_started_at IS ${afterDispatch ? "NOT " : ""}NULL`
   ).bind(errorCode, providerHttpStatus, actionId).run();
   return Number(result.meta?.changes || 0) === 1;
 }
 
-async function persistGmailUnknown(db, actionId, errorCode, providerHttpStatus) {
+async function persistExternalActionUnknown(db, actionId, errorCode, providerHttpStatus) {
   const result = await db.prepare(
     "UPDATE external_actions SET state = 'unknown', finished_at = CURRENT_TIMESTAMP, provider_error_code = ?, provider_http_status = ? WHERE action_id = ? AND state = 'claimed' AND dispatch_started_at IS NOT NULL"
   ).bind(errorCode, providerHttpStatus, actionId).run();
@@ -181,7 +270,14 @@ async function persistStaleGmailDispatchUnknown(db, actionId) {
   return Number(result.meta?.changes || 0) === 1;
 }
 
-async function reserveGmailDispatch(db, actionId) {
+async function persistStaleNotionDispatchUnknown(db, actionId) {
+  const result = await db.prepare(
+    `UPDATE external_actions SET state = 'unknown', finished_at = CURRENT_TIMESTAMP, provider_error_code = 'notion_dispatch_abandoned' WHERE action_id = ? AND state = 'claimed' AND dispatch_started_at <= datetime('now', '-${NOTION_DISPATCH_STALE_MINUTES} minutes')`
+  ).bind(actionId).run();
+  return Number(result.meta?.changes || 0) === 1;
+}
+
+async function reserveExternalActionDispatch(db, actionId) {
   const result = await db.prepare(
     "UPDATE external_actions SET dispatch_started_at = CURRENT_TIMESTAMP WHERE action_id = ? AND state = 'claimed' AND dispatch_started_at IS NULL"
   ).bind(actionId).run();
@@ -195,6 +291,13 @@ async function persistGmailSuccess(db, actionId, sent, providerHttpStatus) {
   return Number(result.meta?.changes || 0) === 1;
 }
 
+async function persistNotionSuccess(db, actionId, resourceId, providerHttpStatus) {
+  const result = await db.prepare(
+    "UPDATE external_actions SET state = 'succeeded', finished_at = CURRENT_TIMESTAMP, provider_resource_id = ?, provider_http_status = ? WHERE action_id = ? AND state = 'claimed' AND dispatch_started_at IS NOT NULL"
+  ).bind(resourceId, providerHttpStatus, actionId).run();
+  return Number(result.meta?.changes || 0) === 1;
+}
+
 function explicitGmailRejection(status, payload) {
   const error = payload?.error;
   const reasons = new Set((error?.errors || []).map((item) => String(item?.reason || "")));
@@ -202,6 +305,10 @@ function explicitGmailRejection(status, payload) {
   if (status === 401 && error?.status === "UNAUTHENTICATED" && (reasons.has("authError") || reasons.has("invalidCredentials"))) return "gmail_rejected_unauthenticated";
   if (status === 403 && error?.status === "PERMISSION_DENIED" && reasons.has("insufficientPermissions")) return "gmail_rejected_insufficient_permissions";
   return null;
+}
+
+function explicitNotionRejection(status) {
+  return [400, 401, 403, 404, 409, 422, 429].includes(status) ? `notion_rejected_http_${status}` : null;
 }
 
 async function executeGmailAction(request, env, actions) {
@@ -229,7 +336,7 @@ async function executeGmailAction(request, env, actions) {
   const expectedHash = await sha256Hex(`${row.action_type}\n${row.target_json}\n${row.payload_json}`);
   const message = row.content_hash === expectedHash ? storedGmailMessage(row) : null;
   if (!message) {
-    await persistGmailFailure(env.DB, actionId, "external_action_integrity_failed", null, false);
+    await persistExternalActionFailure(env.DB, actionId, "external_action_integrity_failed", null, false);
     return response(externalActionResult(await externalActionRow(env.DB, actionId)));
   }
 
@@ -237,11 +344,11 @@ async function executeGmailAction(request, env, actions) {
   try {
     accessToken = await googleAccessToken(env, [GMAIL_SEND_SCOPE]);
   } catch (error) {
-    await persistGmailFailure(env.DB, actionId, error.code || "gmail_authorization_failed", null, false);
+    await persistExternalActionFailure(env.DB, actionId, error.code || "gmail_authorization_failed", null, false);
     return response(externalActionResult(await externalActionRow(env.DB, actionId)));
   }
 
-  if (!await reserveGmailDispatch(env.DB, actionId)) {
+  if (!await reserveExternalActionDispatch(env.DB, actionId)) {
     row = await externalActionRow(env.DB, actionId);
     if (row?.state === "claimed" && row.dispatch_started_at) await persistStaleGmailDispatchUnknown(env.DB, actionId);
     return response(externalActionResult(await externalActionRow(env.DB, actionId)));
@@ -255,7 +362,7 @@ async function executeGmailAction(request, env, actions) {
       body: JSON.stringify({ raw: base64Url(gmailMime(message)) })
     });
   } catch {
-    await persistGmailUnknown(env.DB, actionId, "gmail_network_ambiguous", null);
+    await persistExternalActionUnknown(env.DB, actionId, "gmail_network_ambiguous", null);
     return response(externalActionResult(await externalActionRow(env.DB, actionId)));
   }
 
@@ -263,15 +370,15 @@ async function executeGmailAction(request, env, actions) {
     let providerPayload = null;
     try { providerPayload = await gmailResponse.json(); } catch { /* Unknown provider body remains ambiguous. */ }
     const rejection = explicitGmailRejection(gmailResponse.status, providerPayload);
-    if (rejection) await persistGmailFailure(env.DB, actionId, rejection, gmailResponse.status, true);
-    else await persistGmailUnknown(env.DB, actionId, "gmail_response_ambiguous", gmailResponse.status);
+    if (rejection) await persistExternalActionFailure(env.DB, actionId, rejection, gmailResponse.status, true);
+    else await persistExternalActionUnknown(env.DB, actionId, "gmail_response_ambiguous", gmailResponse.status);
     return response(externalActionResult(await externalActionRow(env.DB, actionId)));
   }
 
   let sent;
   try { sent = await gmailResponse.json(); } catch { sent = null; }
   if (!sent?.id || typeof sent.id !== "string") {
-    await persistGmailUnknown(env.DB, actionId, "gmail_response_ambiguous", gmailResponse.status);
+    await persistExternalActionUnknown(env.DB, actionId, "gmail_response_ambiguous", gmailResponse.status);
     return response(externalActionResult(await externalActionRow(env.DB, actionId)));
   }
   await persistGmailSuccess(env.DB, actionId, sent, gmailResponse.status);
@@ -287,6 +394,98 @@ async function proposeGmailSend(request, env, actions) {
     return response(await actions.proposeGmailExternalAction(env, proposal), 201);
   } catch (error) {
     if (error.message === "idempotency_conflict") return actionError("idempotency_conflict", 409, "the persisted source already proposes different Gmail content for this target");
+    if (error.message === "source_id must identify an existing telegram command") return actionError("source_not_found", 409, "source_id must identify an existing Telegram command");
+    throw error;
+  }
+}
+
+async function executeNotionAction(request, env, actions) {
+  const body = await actionBody(request, ["action_id"]);
+  if (body instanceof Response) return body;
+  const actionId = String(body.action_id || "").toLowerCase();
+  if (!/^[0-9a-f-]{36}$/.test(actionId)) return actionError("invalid_request", 400, "action_id must be a UUID");
+  let row = await externalActionRow(env.DB, actionId);
+  if (!row) return actionError("not_found", 404, "external action not found");
+  if (!NOTION_ACTION_TYPES.has(row.action_type)) return actionError("action_type_mismatch", 409, "action_id does not identify a Notion mutation");
+  if (["succeeded", "failed", "unknown"].includes(row.state)) return response(externalActionResult(row));
+
+  if (row.state === "approved") {
+    await actions.claimExternalAction(env.DB, actionId);
+    row = await externalActionRow(env.DB, actionId);
+  }
+  if (row?.state === "pending" || row?.state === "expired") return actionError("action_not_approved", 409, "the external action is not approved");
+  if (row?.state !== "claimed") return actionError("invalid_action_state", 409, "the external action cannot be executed");
+
+  if (row.dispatch_started_at) {
+    await persistStaleNotionDispatchUnknown(env.DB, actionId);
+    return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+  }
+
+  const expectedHash = await sha256Hex(`${row.action_type}\n${row.target_json}\n${row.payload_json}`);
+  const mutation = row.content_hash === expectedHash ? storedNotionMutation(row) : null;
+  if (!mutation) {
+    await persistExternalActionFailure(env.DB, actionId, "external_action_integrity_failed", null, false);
+    return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+  }
+  if (!env.NOTION_TOKEN) {
+    await persistExternalActionFailure(env.DB, actionId, "notion_not_configured", null, false);
+    return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+  }
+
+  if (!await reserveExternalActionDispatch(env.DB, actionId)) {
+    row = await externalActionRow(env.DB, actionId);
+    if (row?.state === "claimed" && row.dispatch_started_at) await persistStaleNotionDispatchUnknown(env.DB, actionId);
+    return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+  }
+
+  let notionResponse;
+  try {
+    notionResponse = await fetch(`https://api.notion.com/v1${mutation.path}`, {
+      method: mutation.method,
+      headers: { authorization: `Bearer ${env.NOTION_TOKEN}`, "notion-version": NOTION_VERSION, "content-type": "application/json" },
+      body: JSON.stringify(mutation.body)
+    });
+  } catch {
+    await persistExternalActionUnknown(env.DB, actionId, "notion_network_ambiguous", null);
+    return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+  }
+
+  if (!notionResponse.ok) {
+    const rejection = explicitNotionRejection(notionResponse.status);
+    if (rejection) await persistExternalActionFailure(env.DB, actionId, rejection, notionResponse.status, true);
+    else await persistExternalActionUnknown(env.DB, actionId, "notion_response_ambiguous", notionResponse.status);
+    return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+  }
+
+  let resource;
+  try { resource = await notionResponse.json(); } catch { resource = null; }
+  if (!resource?.id || typeof resource.id !== "string") {
+    await persistExternalActionUnknown(env.DB, actionId, "notion_response_ambiguous", notionResponse.status);
+    return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+  }
+  await persistNotionSuccess(env.DB, actionId, resource.id, notionResponse.status);
+  return response(externalActionResult(await externalActionRow(env.DB, actionId)));
+}
+
+async function proposeNotionMutation(request, env, actions, operation) {
+  const keys = operation === "create" ? ["source_id", "properties"]
+    : operation === "update" ? ["source_id", "page_id", "properties"]
+      : ["source_id", "page_id"];
+  const body = await actionBody(request, keys);
+  if (body instanceof Response) return body;
+  const proposal = notionProposal(body, operation, env);
+  if (!proposal) {
+    const detail = operation === "create"
+      ? "source_id, a configured Notion data source and 1 to 30 properties are required"
+      : operation === "update"
+        ? "source_id, page_id and 1 to 30 properties are required"
+        : "source_id and page_id are required";
+    return actionError("invalid_request", 400, detail);
+  }
+  try {
+    return response(await actions.proposeNotionExternalAction(env, proposal), 201);
+  } catch (error) {
+    if (error.message === "idempotency_conflict") return actionError("idempotency_conflict", 409, "the persisted source already proposes different Notion content for this target");
     if (error.message === "source_id must identify an existing telegram command") return actionError("source_not_found", 409, "source_id must identify an existing Telegram command");
     throw error;
   }
@@ -354,41 +553,6 @@ async function notionPage(env, url) {
   return response({ id: page.id, title: notionTitle(page.properties), url: page.url || null, last_edited_time: page.last_edited_time || null, properties: page.properties || {} });
 }
 
-async function updateNotionPage(request, env) {
-  let body;
-  try { body = await request.json(); } catch { return actionError("invalid_request", 400, "a JSON body is required"); }
-  const pageId = String(body?.page_id || "");
-  const properties = body?.properties;
-  if (body?.confirmed !== true) return actionError("explicit_confirmation_required", 409, "Set confirmed to true only after the owner has approved the exact CRM update.");
-  if (!/^[0-9a-f-]{32,36}$/i.test(pageId) || !properties || typeof properties !== "object" || Array.isArray(properties) || Object.keys(properties).length > 30) {
-    return actionError("invalid_request", 400, "page_id and up to 30 Notion properties are required");
-  }
-  const page = await notionRequest(env, `/pages/${encodeURIComponent(pageId)}`, { method: "PATCH", body: JSON.stringify({ properties }) });
-  return response({ updated: true, id: page.id, title: notionTitle(page.properties), last_edited_time: page.last_edited_time || null });
-}
-
-async function createNotionPage(request, env) {
-  let body;
-  try { body = await request.json(); } catch { return actionError("invalid_request", 400, "a JSON body is required"); }
-  const properties = body?.properties;
-  if (body?.confirmed !== true) return actionError("explicit_confirmation_required", 409, "Set confirmed to true only after the owner has approved the exact CRM page to create.");
-  if (!env.NOTION_DATA_SOURCE_ID || !properties || typeof properties !== "object" || Array.isArray(properties) || Object.keys(properties).length > 30) {
-    return actionError("invalid_request", 400, "NOTION_DATA_SOURCE_ID and up to 30 Notion properties are required");
-  }
-  const page = await notionRequest(env, "/pages", { method: "POST", body: JSON.stringify({ parent: { type: "data_source_id", data_source_id: env.NOTION_DATA_SOURCE_ID }, properties }) });
-  return response({ created: true, id: page.id, title: notionTitle(page.properties), url: page.url || null });
-}
-
-async function archiveNotionPage(request, env) {
-  const pageId = new URL(request.url).searchParams.get("page_id") || "";
-  if (!/^[0-9a-f-]{32,36}$/i.test(pageId)) return actionError("invalid_request", 400, "page_id must be a Notion page identifier");
-  let body;
-  try { body = await request.json(); } catch { return actionError("invalid_request", 400, "a JSON body with confirmed true is required"); }
-  if (body?.confirmed !== true) return actionError("explicit_confirmation_required", 409, "Set confirmed to true only after the owner has approved archiving this exact CRM page.");
-  const page = await notionRequest(env, `/pages/${encodeURIComponent(pageId)}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
-  return response({ archived: true, id: page.id });
-}
-
 export const GPT_ACTIONS_OPENAPI = {
   openapi: "3.1.0",
   info: { title: "Belloria commercial actions", version: "1.0.0", description: "Private, read-first Gmail and Notion access. Notion writes require explicit confirmation." },
@@ -401,10 +565,11 @@ export const GPT_ACTIONS_OPENAPI = {
     "/gpt-actions/notion/search": { get: { operationId: "searchNotionPages", summary: "Search CRM pages in Notion", parameters: [{ name: "query", in: "query", required: true, schema: { type: "string" } }, { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 10 } }], responses: { "200": { description: "Pages" } } } },
     "/gpt-actions/notion/page": {
       get: { operationId: "getNotionPage", summary: "Read a Notion CRM page", parameters: [{ name: "page_id", in: "query", required: true, schema: { type: "string" } }], responses: { "200": { description: "CRM page" } } },
-      post: { operationId: "createNotionCrmPageAfterConfirmation", summary: "Create a CRM page only after the owner has approved its exact properties", requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["properties", "confirmed"], properties: { properties: { type: "object" }, confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Created CRM page" } } },
-      patch: { operationId: "updateNotionPageAfterConfirmation", summary: "Update a CRM page only after the owner explicitly confirms the exact properties", requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["page_id", "properties", "confirmed"], properties: { page_id: { type: "string" }, properties: { type: "object" }, confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Updated CRM page" } } },
-      delete: { operationId: "archiveNotionCrmPageAfterConfirmation", summary: "Archive a CRM page only after the owner has approved the exact page", parameters: [{ name: "page_id", in: "query", required: true, schema: { type: "string" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["confirmed"], properties: { confirmed: { type: "boolean", const: true } } } } } }, responses: { "200": { description: "Archived CRM page" } } }
-    }
+      post: { operationId: "proposeNotionCrmPageCreate", summary: "Create and present an immutable CRM page proposal from a persisted Telegram command; this endpoint never writes to Notion", requestBody: { required: true, content: { "application/json": { schema: { type: "object", additionalProperties: false, required: ["source_id", "properties"], properties: { source_id: { type: "string", pattern: "^[0-9]{1,20}$" }, properties: { type: "object" } } } } } }, responses: { "201": { description: "Pending external action presented in the private Telegram chat" } } },
+      patch: { operationId: "proposeNotionPageUpdate", summary: "Create and present an immutable CRM update proposal from a persisted Telegram command; this endpoint never writes to Notion", requestBody: { required: true, content: { "application/json": { schema: { type: "object", additionalProperties: false, required: ["source_id", "page_id", "properties"], properties: { source_id: { type: "string", pattern: "^[0-9]{1,20}$" }, page_id: { type: "string" }, properties: { type: "object" } } } } } }, responses: { "201": { description: "Pending external action presented in the private Telegram chat" } } },
+      delete: { operationId: "proposeNotionPageArchive", summary: "Create and present an immutable CRM archive proposal from a persisted Telegram command; this endpoint never writes to Notion", requestBody: { required: true, content: { "application/json": { schema: { type: "object", additionalProperties: false, required: ["source_id", "page_id"], properties: { source_id: { type: "string", pattern: "^[0-9]{1,20}$" }, page_id: { type: "string" } } } } } }, responses: { "201": { description: "Pending external action presented in the private Telegram chat" } } }
+    },
+    "/gpt-actions/notion/execute": { post: { operationId: "executeApprovedNotionAction", summary: "Execute one approved Notion mutation by action_id only; target and content are always reloaded from D1", requestBody: { required: true, content: { "application/json": { schema: { type: "object", additionalProperties: false, required: ["action_id"], properties: { action_id: { type: "string", pattern: "^[0-9a-fA-F-]{36}$" } } } } } }, responses: { "200": { description: "Persisted Notion action state and, on success, the Notion resource identifier" }, "409": { description: "Action is not approved or is not a Notion mutation" } } } }
   },
   components: {
     schemas: {
@@ -429,9 +594,10 @@ export async function gptActions(request, env, actions = {}) {
     if (url.pathname === "/gpt-actions/gmail/execute" && request.method === "POST") return executeGmailAction(request, env, actions);
     if (url.pathname === "/gpt-actions/notion/search" && request.method === "GET") return notionSearch(env, url);
     if (url.pathname === "/gpt-actions/notion/page" && request.method === "GET") return notionPage(env, url);
-    if (url.pathname === "/gpt-actions/notion/page" && request.method === "POST") return createNotionPage(request, env);
-    if (url.pathname === "/gpt-actions/notion/page" && request.method === "PATCH") return updateNotionPage(request, env);
-    if (url.pathname === "/gpt-actions/notion/page" && request.method === "DELETE") return archiveNotionPage(request, env);
+    if (url.pathname === "/gpt-actions/notion/page" && request.method === "POST") return proposeNotionMutation(request, env, actions, "create");
+    if (url.pathname === "/gpt-actions/notion/page" && request.method === "PATCH") return proposeNotionMutation(request, env, actions, "update");
+    if (url.pathname === "/gpt-actions/notion/page" && request.method === "DELETE") return proposeNotionMutation(request, env, actions, "archive");
+    if (url.pathname === "/gpt-actions/notion/execute" && request.method === "POST") return executeNotionAction(request, env, actions);
     return actionError("not_found", 404, "Action not found");
   } catch (error) {
     return actionError(error.code || "upstream_failed", error.status || 502, error.message || "The integration request failed");

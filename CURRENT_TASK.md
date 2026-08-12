@@ -1,40 +1,50 @@
-# BELL-047.3 — Alignement du compte Gmail d’envoi Belloria
+# BELL-048 — Intégration Notion au registre d’actions
 
-Statut: blocked
-Branche: `codex/bell-047-3-gmail-oauth-belloria`
+Statut: ready_for_review
+Branche: `codex/bell-048-notion-action-registry`
 Dernière mise à jour: 2026-08-12
 
 ## Objectif
 
-Aligner l’autorisation OAuth Gmail du Worker sur le compte Belloria, afin que l’identité d’envoi réelle soit Belloria plutôt que Colibri.
+Raccorder les créations, mises à jour et archivages Notion des Actions GPT au registre BELL-046, afin qu’aucune mutation ne repose uniquement sur `confirmed: true`.
 
 ## Contexte autorisé
 
-- Domaine : configuration OAuth Gmail distante et validation Gmail en lecture.
-- Fichiers initiaux : configuration Worker, documentation Gmail et suivi projet.
-- Skill requis : Gmail, pour vérifier le compte en lecture après rotation ; aucun autre skill.
-- MCP ou connecteur requis : Gmail et Chrome, pour la session Google Belloria ; aucun appel Gmail d’envoi sans confirmation Telegram.
-- Hors périmètre : BELL-047.2/réconciliation, code d’envoi Gmail, Notion, migration D1, Queue, Brevo, WAHA/Meta et refactor général.
+- Domaine : code local Worker, migration D1, contrat OpenAPI et tests Worker/D1.
+- Fichiers initiaux : routes Actions GPT, registre `external_actions`, migrations D1 et tests associés.
+- Skill requis : aucun au démarrage.
+- MCP ou connecteur requis : aucun au démarrage ; les tests doublent Notion et Telegram. Un accès Notion en lecture ne sera envisagé que pour une validation ultérieure nécessaire.
+- Hors périmètre : BELL-047.2/047.3, OAuth Google, envoi Gmail, modifications réelles du CRM Notion, Brevo, Tally, WAHA/Meta et refactor général.
 
 ## Critères de sortie
 
-- Le refresh token Gmail distant du Worker est remplacé uniquement par un consentement accordé sous le compte Belloria.
-- L’identité OAuth active est vérifiée sans envoi d’email.
-- Aucun code Worker ni aucune règle BELL-047.2 n’est modifié.
+- Les mutations Notion produisent une proposition durable issue d’une commande Telegram, approuvée avant exécution.
+- L’exécution relit le contenu immuable du registre, le réserve atomiquement et persiste un résultat terminal sans rejeu ambigu.
+- Les tests Worker/D1, le contrôle du diff et l’examen de périmètre réussissent.
 
 ## Garde de sécurité
 
-- Le refresh token ne doit jamais être affiché, copié dans le dépôt ou transmis dans la conversation.
-- Le remplacement du secret de production exige une confirmation immédiate de l’utilisateur.
-- BELL-047.2 reste bloqué : cette rotation ne valide ni le `Message-ID` ni la recherche `rfc822msgid`.
+- Aucun appel Notion réel, aucune mutation CRM et aucun déploiement ne sont autorisés sans demande explicite.
+- Les contenus de mutation validés restent immuables entre leur présentation Telegram et leur exécution.
 
 ## État initial
 
-- Le test contrôlé BELL-047.2 du 2026-08-11 a montré que le refresh token actuel correspond à `hello.colibridesign@gmail.com`, et non au compte Belloria attendu.
-- BELL-047.2 a été préservé dans le stash local `bell-047.2 validation blocked` sans commit ni push, conformément à son arrêt avant implémentation.
-- Le projet Google Cloud contient le client Web `Belloria GPT — Gmail`, mais aucun secret client réutilisable n'est visible : la console propose seulement d'en créer un. La rotation du seul refresh token n'est donc pas encore justifiée ; elle nécessiterait de remplacer aussi `GOOGLE_CLIENT_SECRET` distant avec un nouveau secret du même client, après accord explicite.
-- La session Chrome `belloriaevent@gmail.com` est disponible, mais Google Cloud bloque son accès tant que la validation en deux étapes (MFA) du compte Belloria n'est pas activée. Cette activation doit être réalisée par le titulaire du compte avant toute rotation OAuth.
+- BELL-046 fournit le registre `external_actions`, l’approbation Telegram et le claim atomique.
+- BELL-047.1 applique déjà ce modèle à l’envoi Gmail ; les mutations Notion restent directes sur `confirmed: true`.
+- BELL-039 a une connexion Notion créée, mais sa source CRM n’est pas encore exposée par l’API pour les créations ; ce lot doit conserver un comportement sûr en cas d’indisponibilité fournisseur.
 
 ## Prochaine action
 
-- Activer la MFA du compte `belloriaevent@gmail.com`, puis reprendre la rotation OAuth avec confirmation immédiate avant la création du secret client et le remplacement des secrets Worker distants.
+- Appliquer la migration D1 et déployer le Worker après revue explicite, puis effectuer une validation contrôlée sans mutation CRM réelle avant toute utilisation opérationnelle.
+
+## Résultat
+
+- Les routes Notion `POST`, `PATCH` et `DELETE /gpt-actions/notion/page` créent désormais des propositions immuables liées à une commande Telegram persistée ; `confirmed: true` n’est plus accepté.
+- `POST /gpt-actions/notion/execute` ne reçoit que `action_id`, relit la cible et le contenu depuis D1, réserve le dispatch et conserve les états `succeeded`, `failed` ou `unknown` sans rejeu ambigu.
+- La migration `0009_notion_external_action_execution.sql` ajoute la ressource fournisseur Notion au résultat immuable et étend les transitions D1 aux succès Notion.
+
+## Validation
+
+- `npm.cmd run test:worker` : 47 tests réussis.
+- Runtime Python fourni par Codex : 79 tests réussis, dont les migrations D1.
+- Aucun appel Notion réel, aucune mutation CRM et aucun déploiement effectués.

@@ -101,7 +101,7 @@ class FakeDb {
         state: "pending", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
         presented_at: null, presentation_message_id: null, presentation_chat_id: null,
         approved_at: null, approval_command_id: null, approval_message_id: null, approval_chat_id: null, claimed_at: null,
-        dispatch_started_at: null, finished_at: null, provider_message_id: null, provider_thread_id: null, provider_http_status: null, provider_error_code: null
+        dispatch_started_at: null, finished_at: null, provider_message_id: null, provider_thread_id: null, provider_resource_id: null, provider_http_status: null, provider_error_code: null
       });
       return { meta: { changes: 1 } };
     }
@@ -135,6 +135,13 @@ class FakeDb {
     }
 
     if (sql.startsWith("UPDATE external_actions SET state = 'succeeded'")) {
+      if (sql.includes("provider_resource_id")) {
+        const [resourceId, httpStatus, actionId] = args;
+        const row = this.externalActions.get(actionId);
+        if (!row || row.state !== "claimed" || !row.dispatch_started_at) return { meta: { changes: 0 } };
+        Object.assign(row, { state: "succeeded", finished_at: new Date().toISOString(), provider_resource_id: resourceId, provider_http_status: httpStatus });
+        return { meta: { changes: 1 } };
+      }
       const [messageId, threadId, httpStatus, actionId] = args;
       const row = this.externalActions.get(actionId);
       if (!row || row.state !== "claimed" || !row.dispatch_started_at) return { meta: { changes: 0 } };
@@ -152,14 +159,15 @@ class FakeDb {
     }
 
     if (sql.startsWith("UPDATE external_actions SET state = 'unknown'")) {
-      const staleOnly = sql.includes("gmail_dispatch_abandoned");
+      const staleCode = /provider_error_code = '([^']+_dispatch_abandoned)'/.exec(sql)?.[1] || null;
+      const staleOnly = Boolean(staleCode);
       const actionId = staleOnly ? args[0] : args[2];
       const row = this.externalActions.get(actionId);
       if (!row || row.state !== "claimed" || !row.dispatch_started_at) return { meta: { changes: 0 } };
       if (staleOnly && Date.parse(row.dispatch_started_at) > Date.now() - 2 * 60000) return { meta: { changes: 0 } };
       Object.assign(row, {
         state: "unknown", finished_at: new Date().toISOString(),
-        provider_error_code: staleOnly ? "gmail_dispatch_abandoned" : args[0],
+        provider_error_code: staleOnly ? staleCode : args[0],
         provider_http_status: staleOnly ? null : args[1]
       });
       return { meta: { changes: 1 } };
@@ -386,6 +394,22 @@ function gmailActionRequest(path, body) {
   });
 }
 
+function notionActionRequest(method, body) {
+  return new Request("https://worker.test/gpt-actions/notion/page", {
+    method,
+    headers: { authorization: "Bearer action-secret", "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+function notionExecuteRequest(body) {
+  return new Request("https://worker.test/gpt-actions/notion/execute", {
+    method: "POST",
+    headers: { authorization: "Bearer action-secret", "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
 async function createApprovedGmailAction(env, overrides = {}) {
   await handleRequest(telegramRequest(textUpdate()), env);
   const proposed = await handleRequest(gmailActionRequest("send", {
@@ -397,6 +421,30 @@ async function createApprovedGmailAction(env, overrides = {}) {
   await handleRequest(telegramRequest(textUpdate({
     update_id: 7002,
     message: { message_id: 82, chat: { id: 123456 }, text: `CONFIRMER ${token}` }
+  })), env);
+  assert.equal(env.DB.externalActions.get(action.action_id).state, "approved");
+  return action;
+}
+
+async function createApprovedNotionAction(env, overrides = {}) {
+  const sourceId = String(overrides.source_id || "7001");
+  const method = overrides.method || "POST";
+  const pageId = overrides.page_id || "b55c9c91-384d-452b-81db-d1ef79372b75";
+  const properties = overrides.properties || { Nom: { title: [{ text: { content: "Camille Martin" } }] } };
+  await handleRequest(telegramRequest(textUpdate({
+    update_id: Number(sourceId), message: { message_id: Number(sourceId) - 6920, chat: { id: 123456 }, text: "Prépare la mutation CRM" }
+  })), env);
+  const body = method === "POST" ? { source_id: sourceId, properties }
+    : method === "PATCH" ? { source_id: sourceId, page_id: pageId, properties }
+      : { source_id: sourceId, page_id: pageId };
+  const proposed = await handleRequest(notionActionRequest(method, body), env);
+  assert.equal(proposed.status, 201);
+  const action = await proposed.json();
+  const token = env.DB.externalActions.get(action.action_id).confirmation_token;
+  const confirmationId = Number(sourceId) + 100;
+  await handleRequest(telegramRequest(textUpdate({
+    update_id: confirmationId,
+    message: { message_id: confirmationId - 6920, chat: { id: 123456 }, text: `CONFIRMER ${token}` }
   })), env);
   assert.equal(env.DB.externalActions.get(action.action_id).state, "approved");
   return action;
@@ -1318,14 +1366,166 @@ test("resumes only a claimed Gmail action that has no dispatch marker", async ()
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("refuses CRM updates without an explicit confirmation", async () => {
-  const request = new Request("https://worker.test/gpt-actions/notion/page", {
-    method: "PATCH", headers: { authorization: "Bearer action-secret", "content-type": "application/json" },
-    body: JSON.stringify({ page_id: "b55c9c91-384d-452b-81db-d1ef79372b75", properties: { Pipeline: { status: { name: "À qualifier" } } } })
-  });
-  const result = await handleRequest(request, environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_TOKEN: "notion-secret" }));
-  assert.equal(result.status, 409);
-  assert.equal((await result.json()).error.code, "explicit_confirmation_required");
+test("creates and presents immutable Notion proposals without a direct-write path", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 601 } });
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const env = environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_DATA_SOURCE_ID: "9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2" });
+    await handleRequest(telegramRequest(textUpdate()), env);
+    const legacy = await handleRequest(notionActionRequest("POST", {
+      properties: { Nom: { title: [{ text: { content: "Camille Martin" } }] } }, confirmed: true
+    }), env);
+    assert.equal(legacy.status, 400);
+
+    const created = await handleRequest(notionActionRequest("POST", {
+      source_id: "7001", properties: { Nom: { title: [{ text: { content: "Camille Martin" } }] } }
+    }), env);
+    assert.equal(created.status, 201);
+    const createAction = await created.json();
+    const createRow = env.DB.externalActions.get(createAction.action_id);
+    assert.equal(createRow.action_type, "notion_page_create");
+    assert.equal(createRow.state, "pending");
+    assert.match(createRow.approval_text, /"notion_data_source_id":"9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2"/);
+
+    await handleRequest(telegramRequest(textUpdate({ update_id: 7002, message: { message_id: 82, chat: { id: 123456 }, text: "Actualise Camille" } })), env);
+    const updated = await handleRequest(notionActionRequest("PATCH", {
+      source_id: "7002", page_id: "b55c9c91-384d-452b-81db-d1ef79372b75", properties: { Pipeline: { status: { name: "À qualifier" } } }
+    }), env);
+    assert.equal(updated.status, 201);
+    assert.equal(env.DB.externalActions.get((await updated.json()).action_id).action_type, "notion_page_update");
+
+    await handleRequest(telegramRequest(textUpdate({ update_id: 7003, message: { message_id: 83, chat: { id: 123456 }, text: "Archive Camille" } })), env);
+    const archived = await handleRequest(notionActionRequest("DELETE", {
+      source_id: "7003", page_id: "b55c9c91-384d-452b-81db-d1ef79372b75"
+    }), env);
+    assert.equal(archived.status, 201);
+    assert.equal(env.DB.externalActions.get((await archived.json()).action_id).action_type, "notion_page_archive");
+    assert.equal(calls.some((call) => call.url.startsWith("https://api.notion.com/")), false);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("claims concurrent approved Notion executions once and replays the persisted success", async () => {
+  const originalFetch = globalThis.fetch;
+  const notionCalls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 602 } });
+    if (String(url) === "https://api.notion.com/v1/pages") {
+      notionCalls.push(JSON.parse(options.body));
+      return Response.json({ id: "b55c9c91-384d-452b-81db-d1ef79372b75" });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const env = environment({
+      GPT_ACTIONS_TOKEN: "action-secret", NOTION_TOKEN: "notion-secret", NOTION_DATA_SOURCE_ID: "9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2"
+    });
+    const action = await createApprovedNotionAction(env);
+    const [first, second] = await Promise.all([
+      handleRequest(notionExecuteRequest({ action_id: action.action_id }), env),
+      handleRequest(notionExecuteRequest({ action_id: action.action_id }), env)
+    ]);
+    await first.json();
+    await second.json();
+    assert.equal(notionCalls.length, 1);
+    assert.deepEqual(notionCalls[0].parent, { type: "data_source_id", data_source_id: "9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2" });
+    const row = env.DB.externalActions.get(action.action_id);
+    assert.equal(row.state, "succeeded");
+    assert.equal(row.provider_resource_id, "b55c9c91-384d-452b-81db-d1ef79372b75");
+    const replay = await handleRequest(notionExecuteRequest({ action_id: action.action_id }), env);
+    assert.deepEqual(await replay.json(), { action_id: action.action_id, state: "succeeded", completed: true, resource_id: "b55c9c91-384d-452b-81db-d1ef79372b75" });
+    assert.equal(notionCalls.length, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("replays the exact approved Notion update and archive content from D1", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 604 } });
+    if (String(url).startsWith("https://api.notion.com/v1/pages/")) {
+      calls.push({ url: String(url), method: options.method, body: JSON.parse(options.body) });
+      return Response.json({ id: "b55c9c91-384d-452b-81db-d1ef79372b75" });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const env = environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_TOKEN: "notion-secret" });
+    const pageId = "b55c9c91-384d-452b-81db-d1ef79372b75";
+    const updated = await createApprovedNotionAction(env, {
+      source_id: "7002", method: "PATCH", page_id: pageId, properties: { Pipeline: { status: { name: "À qualifier" } } }
+    });
+    const archived = await createApprovedNotionAction(env, { source_id: "7003", method: "DELETE", page_id: pageId });
+    assert.equal((await (await handleRequest(notionExecuteRequest({ action_id: updated.action_id }), env)).json()).state, "succeeded");
+    assert.equal((await (await handleRequest(notionExecuteRequest({ action_id: archived.action_id }), env)).json()).state, "succeeded");
+    assert.deepEqual(calls, [
+      { url: `https://api.notion.com/v1/pages/${pageId}`, method: "PATCH", body: { properties: { Pipeline: { status: { name: "À qualifier" } } } } },
+      { url: `https://api.notion.com/v1/pages/${pageId}`, method: "PATCH", body: { archived: true } }
+    ]);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("marks only a stale Notion dispatch unknown", async () => {
+  const originalFetch = globalThis.fetch;
+  let notionCalls = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 605 } });
+    if (String(url).startsWith("https://api.notion.com/")) notionCalls += 1;
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const env = environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_TOKEN: "notion-secret", NOTION_DATA_SOURCE_ID: "9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2" });
+    const action = await createApprovedNotionAction(env);
+    Object.assign(env.DB.externalActions.get(action.action_id), { state: "claimed", claimed_at: new Date().toISOString(), dispatch_started_at: new Date().toISOString() });
+    const inFlight = await handleRequest(notionExecuteRequest({ action_id: action.action_id }), env);
+    assert.equal((await inFlight.json()).state, "claimed");
+    assert.equal(notionCalls, 0);
+
+    env.DB.externalActions.get(action.action_id).dispatch_started_at = "2020-01-01T00:00:00.000Z";
+    const stale = await handleRequest(notionExecuteRequest({ action_id: action.action_id }), env);
+    assert.deepEqual(await stale.json(), { action_id: action.action_id, state: "unknown", error_code: "notion_dispatch_abandoned", provider_http_status: null });
+    assert.equal(notionCalls, 0);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("persists failed and ambiguous Notion mutations without a retry", async () => {
+  const originalFetch = globalThis.fetch;
+  let mode = "rejected";
+  let notionCalls = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url) === "https://api.telegram.org/bottelegram-test-token/sendMessage") return Response.json({ ok: true, result: { message_id: 603 } });
+    if (String(url).startsWith("https://api.notion.com/")) {
+      notionCalls += 1;
+      if (mode === "rejected") return Response.json({ object: "error" }, { status: 400 });
+      throw new Error("connection lost after dispatch");
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  try {
+    const missingConfig = environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_DATA_SOURCE_ID: "9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2" });
+    const missingAction = await createApprovedNotionAction(missingConfig);
+    const missing = await handleRequest(notionExecuteRequest({ action_id: missingAction.action_id }), missingConfig);
+    assert.deepEqual(await missing.json(), { action_id: missingAction.action_id, state: "failed", error_code: "notion_not_configured", provider_http_status: null });
+
+    const rejectedEnv = environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_TOKEN: "notion-secret", NOTION_DATA_SOURCE_ID: "9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2" });
+    const rejectedAction = await createApprovedNotionAction(rejectedEnv);
+    const rejected = await handleRequest(notionExecuteRequest({ action_id: rejectedAction.action_id }), rejectedEnv);
+    assert.deepEqual(await rejected.json(), { action_id: rejectedAction.action_id, state: "failed", error_code: "notion_rejected_http_400", provider_http_status: 400 });
+    await handleRequest(notionExecuteRequest({ action_id: rejectedAction.action_id }), rejectedEnv);
+    assert.equal(notionCalls, 1);
+
+    mode = "network";
+    const unknownEnv = environment({ GPT_ACTIONS_TOKEN: "action-secret", NOTION_TOKEN: "notion-secret", NOTION_DATA_SOURCE_ID: "9a7d3f64-50e3-4db3-9c97-14d5f8c0a1b2" });
+    const unknownAction = await createApprovedNotionAction(unknownEnv);
+    const unknown = await handleRequest(notionExecuteRequest({ action_id: unknownAction.action_id }), unknownEnv);
+    assert.deepEqual(await unknown.json(), { action_id: unknownAction.action_id, state: "unknown", error_code: "notion_network_ambiguous", provider_http_status: null });
+    await handleRequest(notionExecuteRequest({ action_id: unknownAction.action_id }), unknownEnv);
+    assert.equal(notionCalls, 2);
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test("serves a hardened OAuth authorization form", async () => {
