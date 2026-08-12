@@ -69,6 +69,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 - [ ] **BELL-047.2 — Réconciliation Gmail** (`pending`)
   Valider d'abord en conditions contrôlées la conservation et la recherche du `Message-ID`, puis seulement concevoir la résolution des actions Gmail `unknown`, sans capacité de renvoi automatique.
 
+- [ ] **BELL-047.3 — Alignement du compte Gmail d’envoi Belloria** (`blocked`)
+  Réautoriser le Worker Gmail sous le compte Belloria, en remplacer uniquement le refresh token distant, puis vérifier l’identité OAuth en lecture sans envoyer d’email.
+  **Terminé lorsque** le compte émetteur OAuth est Belloria et que BELL-047.2 peut reprendre sa validation de corrélation, sans préjuger de son résultat.
+
 - [ ] **BELL-048 — Intégration Notion au registre d’actions** (`pending`)
   Raccorder les créations, mises à jour et archivages Notion au registre BELL-046, avec vérification de concurrence et traitement explicite des résultats incertains.
   **Terminé lorsque** aucune mutation Notion ne dépend plus seulement de `confirmed: true` et que les replays respectent l'état réellement lu dans Notion.

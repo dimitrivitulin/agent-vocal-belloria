@@ -1,42 +1,40 @@
-# BELL-047.1 — Envoi Gmail durable
+# BELL-047.3 — Alignement du compte Gmail d’envoi Belloria
 
-Statut: completed
-Branche: `codex/bell-047-gmail-durable-dispatch`
-Dernière mise à jour: 2026-08-10
+Statut: blocked
+Branche: `codex/bell-047-3-gmail-oauth-belloria`
+Dernière mise à jour: 2026-08-12
 
 ## Objectif
 
-Raccorder uniquement l'envoi Gmail au registre BELL-046 : proposition issue d'une commande Telegram persistée, approbation durable, claim et dispatch Gmail à effet unique, puis résultat `succeeded`, `failed` ou `unknown`.
+Aligner l’autorisation OAuth Gmail du Worker sur le compte Belloria, afin que l’identité d’envoi réelle soit Belloria plutôt que Colibri.
 
 ## Contexte autorisé
 
-- Domaine : code local Worker, migration D1, OpenAPI et tests Worker/D1.
-- Fichiers initiaux : `worker/src/gpt-actions.js`, `worker/src/index.js`, migrations D1, tests Worker/D1 et suivi projet.
-- Skill requis : aucun.
-- MCP ou connecteur requis : aucun ; les tests doublent Gmail et Telegram.
-- Hors périmètre : BELL-047.2/réconciliation, Notion, Brevo, WAHA/Meta, Queue, refactor général, déploiement.
-
-## Décisions de lot
-
-- `gmail_send` exige `source_type=telegram_command` et un `source_id` persistant ; aucune source ChatGPT n'est ajoutée.
-- L'exécution accepte seulement `action_id` et relit le contenu canonique D1. `confirmed: true` n'autorise plus aucun envoi Gmail direct.
-- Le marqueur de corrélation `Message-ID` est déterministe mais ne sert à aucune réconciliation dans ce lot.
-- Après `dispatch_started_at`, tout résultat non explicitement rejeté par Gmail devient `unknown`, sans retry d'envoi.
+- Domaine : configuration OAuth Gmail distante et validation Gmail en lecture.
+- Fichiers initiaux : configuration Worker, documentation Gmail et suivi projet.
+- Skill requis : Gmail, pour vérifier le compte en lecture après rotation ; aucun autre skill.
+- MCP ou connecteur requis : Gmail et Chrome, pour la session Google Belloria ; aucun appel Gmail d’envoi sans confirmation Telegram.
+- Hors périmètre : BELL-047.2/réconciliation, code d’envoi Gmail, Notion, migration D1, Queue, Brevo, WAHA/Meta et refactor général.
 
 ## Critères de sortie
 
-- Deux exécutions ou rejeux ne peuvent produire qu'un seul appel Gmail simulé.
-- Les résultats terminaux sont persistés ; `succeeded` et `unknown` ne rappellent jamais Gmail.
-- Les tests Worker/D1, le contrôle du diff et l'examen de périmètre réussissent.
+- Le refresh token Gmail distant du Worker est remplacé uniquement par un consentement accordé sous le compte Belloria.
+- L’identité OAuth active est vérifiée sans envoi d’email.
+- Aucun code Worker ni aucune règle BELL-047.2 n’est modifié.
 
-## Résultat
+## Garde de sécurité
 
-- `POST /gpt-actions/gmail/send` ne crée plus qu'une proposition durable et présentée Telegram ; `confirmed: true` est refusé comme champ Gmail non pris en charge.
-- `POST /gpt-actions/gmail/execute` accepte exclusivement `action_id`, réserve le dispatch avant l'unique appel Gmail et persiste les états terminaux immuables.
-- BELL-047.2 reste seul responsable de valider puis d'implémenter une éventuelle réconciliation par `Message-ID`.
+- Le refresh token ne doit jamais être affiché, copié dans le dépôt ou transmis dans la conversation.
+- Le remplacement du secret de production exige une confirmation immédiate de l’utilisateur.
+- BELL-047.2 reste bloqué : cette rotation ne valide ni le `Message-ID` ni la recherche `rfc822msgid`.
 
-## Validation
+## État initial
 
-- `npm.cmd run test:worker` : 43 tests réussis.
-- Tests D1/Python : 79 tests réussis avec le runtime Python local.
-- `git diff --check`, examen du diff et recherche des routes Gmail : réussis ; aucune modification Notion, Brevo, Queue ou WAHA/Meta.
+- Le test contrôlé BELL-047.2 du 2026-08-11 a montré que le refresh token actuel correspond à `hello.colibridesign@gmail.com`, et non au compte Belloria attendu.
+- BELL-047.2 a été préservé dans le stash local `bell-047.2 validation blocked` sans commit ni push, conformément à son arrêt avant implémentation.
+- Le projet Google Cloud contient le client Web `Belloria GPT — Gmail`, mais aucun secret client réutilisable n'est visible : la console propose seulement d'en créer un. La rotation du seul refresh token n'est donc pas encore justifiée ; elle nécessiterait de remplacer aussi `GOOGLE_CLIENT_SECRET` distant avec un nouveau secret du même client, après accord explicite.
+- La session Chrome `belloriaevent@gmail.com` est disponible, mais Google Cloud bloque son accès tant que la validation en deux étapes (MFA) du compte Belloria n'est pas activée. Cette activation doit être réalisée par le titulaire du compte avant toute rotation OAuth.
+
+## Prochaine action
+
+- Activer la MFA du compte `belloriaevent@gmail.com`, puis reprendre la rotation OAuth avec confirmation immédiate avant la création du secret client et le remplacement des secrets Worker distants.
