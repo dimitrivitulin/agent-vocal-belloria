@@ -73,10 +73,10 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
   Réautoriser le Worker Gmail sous le compte Belloria, en remplacer uniquement le refresh token distant, puis vérifier l’identité OAuth en lecture sans envoyer d’email.
   **Terminé lorsque** le compte émetteur OAuth est Belloria et que BELL-047.2 peut reprendre sa validation de corrélation, sans préjuger de son résultat.
 
-- [ ] **BELL-048 — Intégration Notion au registre d’actions** (`blocked`)
+- [x] **BELL-048 — Intégration Notion au registre d’actions** (`completed`)
   Raccorder les créations, mises à jour et archivages Notion au registre BELL-046, avec vérification de concurrence et traitement explicite des résultats incertains.
   **Terminé lorsque** aucune mutation Notion ne dépend plus seulement de `confirmed: true` et que les replays respectent l'état réellement lu dans Notion.
-  Propositions immuables Telegram, exécution par `action_id`, résultats terminaux et migration D1 sont prêts localement ; le déploiement autorisé est bloqué par l’authentification Wrangler sans jeton API non interactif.
+  Propositions immuables Telegram, exécution par `action_id` et résultats terminaux déployés. Migration D1 `0009` appliquée et vérifiée le 2026-08-12 ; aucun appel Notion réel n’a été exécuté.
 
 - [x] **BELL-045 — Transitions SMS Brevo monotones** (`completed`)
   Empêcher les callbacks Brevo tardifs ou répétés de faire régresser l'état SMS D1, en conservant les rapprochements par `messageId` et tag Tally.

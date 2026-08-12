@@ -1,6 +1,6 @@
 # BELL-048 — Intégration Notion au registre d’actions
 
-Statut: blocked
+Statut: completed
 Branche: `codex/bell-048-notion-action-registry`
 Dernière mise à jour: 2026-08-12
 
@@ -35,7 +35,7 @@ Raccorder les créations, mises à jour et archivages Notion des Actions GPT au 
 
 ## Prochaine action
 
-- Rétablir une authentification Cloudflare utilisable par Wrangler (jeton API local non versionné ou connexion CLI explicitement autorisée), puis appliquer `0009` et déployer sans exécuter de mutation CRM Notion réelle.
+- Reprendre le prochain lot explicitement prioritaire dans `docs/TASKS.md`.
 
 ## Résultat
 
@@ -47,5 +47,7 @@ Raccorder les créations, mises à jour et archivages Notion des Actions GPT au 
 
 - `npm.cmd run test:worker` : 47 tests réussis.
 - Runtime Python fourni par Codex : 79 tests réussis, dont les migrations D1.
-- Aucun appel Notion réel, aucune mutation CRM et aucun déploiement effectués.
-- Wrangler ne reçoit aucun `CLOUDFLARE_API_TOKEN` dans son environnement non interactif ; aucune migration D1 ni aucun déploiement n’a donc démarré.
+- Aucun appel Notion réel ni aucune mutation CRM effectués.
+- Authentification OAuth Wrangler rétablie le 2026-08-12 ; migration distante `0009_notion_external_action_execution.sql` appliquée sur D1 `belloria-whatsapp` puis confirmée sans migration restante.
+- Worker `belloria-assistant` déployé le 2026-08-12 (version `88e203a2-b4c7-463b-b22d-218646aabd27`).
+- Après déploiement : `npm.cmd run test:worker` (47 tests) et `python -m unittest discover -s tests` (79 tests) réussis ; `git diff --check` réussit.
