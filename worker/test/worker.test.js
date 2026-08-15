@@ -6,7 +6,7 @@ import { createWorkerEntrypoint, extractTallySubmission, extractTelegramCommand,
 globalThis.crypto ||= webcrypto;
 
 class FakeDb {
-  constructor() { this.rows = new Map(); this.actions = new Map(); this.externalActions = new Map(); this.snapshots = new Map(); this.tally = new Map(); }
+  constructor() { this.rows = new Map(); this.actions = new Map(); this.externalActions = new Map(); this.codexSmsActions = new Map(); this.snapshots = new Map(); this.tally = new Map(); }
 
   prepare(sql) {
     const db = this;
@@ -28,6 +28,52 @@ class FakeDb {
   }
 
   run(sql, args) {
+    if (sql.startsWith("INSERT INTO codex_sms_actions")) {
+      const [action_id, idempotency_key, recipient, content, consent_reference, content_hash, modifier] = args;
+      if (this.codexSmsActions.has(idempotency_key)) return { meta: { changes: 0 } };
+      const minutes = Number(String(modifier).match(/\d+/)?.[0] || 30);
+      const row = {
+        action_id, idempotency_key, recipient, content, consent_reference, content_hash,
+        state: "pending", created_at: new Date().toISOString(), expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
+        confirmed_at: null, claimed_at: null, dispatch_started_at: null, finished_at: null,
+        provider_message_id: null, provider_http_status: null, provider_error_code: null
+      };
+      this.codexSmsActions.set(idempotency_key, row);
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE codex_sms_actions SET state = 'expired'")) {
+      const row = [...this.codexSmsActions.values()].find((item) => item.action_id === args[0]);
+      if (!row || row.state !== "pending" || new Date(row.expires_at) > new Date()) return { meta: { changes: 0 } };
+      row.state = "expired";
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE codex_sms_actions SET state = 'claimed'")) {
+      const row = [...this.codexSmsActions.values()].find((item) => item.action_id === args[0]);
+      if (!row || row.state !== "pending" || new Date(row.expires_at) <= new Date()) return { meta: { changes: 0 } };
+      Object.assign(row, { state: "claimed", confirmed_at: new Date().toISOString(), claimed_at: new Date().toISOString() });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE codex_sms_actions SET dispatch_started_at")) {
+      const row = [...this.codexSmsActions.values()].find((item) => item.action_id === args[0]);
+      if (!row || row.state !== "claimed" || row.dispatch_started_at) return { meta: { changes: 0 } };
+      row.dispatch_started_at = new Date().toISOString();
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE codex_sms_actions SET state = ?")) {
+      const [state, messageId, httpStatus, errorCode, actionId] = args;
+      const row = [...this.codexSmsActions.values()].find((item) => item.action_id === actionId);
+      if (!row || row.state !== "claimed") return { meta: { changes: 0 } };
+      Object.assign(row, {
+        state, finished_at: new Date().toISOString(), provider_message_id: messageId,
+        provider_http_status: httpStatus, provider_error_code: errorCode
+      });
+      return { meta: { changes: 1 } };
+    }
+
     if (sql.startsWith("INSERT INTO tally_submissions")) {
       const [event_id, submission_id, form_id, form_name, submitted_at, payload_json] = args;
       if (this.tally.has(event_id) || [...this.tally.values()].some((row) => row.submission_id === submission_id)) return { meta: { changes: 0 } };
@@ -234,6 +280,14 @@ class FakeDb {
   }
 
   all(sql, args) {
+    if (sql.startsWith("SELECT * FROM codex_sms_actions WHERE idempotency_key")) {
+      const row = this.codexSmsActions.get(args[0]);
+      return { results: row ? [{ ...row }] : [] };
+    }
+    if (sql.startsWith("SELECT * FROM codex_sms_actions WHERE action_id")) {
+      const row = [...this.codexSmsActions.values()].find((item) => item.action_id === args[0]);
+      return { results: row ? [{ ...row }] : [] };
+    }
     if (sql.startsWith("SELECT * FROM external_actions WHERE creation_key")) {
       const row = [...this.externalActions.values()].find((item) => item.creation_key === args[0]);
       return { results: row ? [{ ...row }] : [] };
@@ -336,6 +390,22 @@ function brevoWebhook(payload, token = "brevo-webhook-token") {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(payload)
+  });
+}
+
+function codexSmsProposalRequest(body, token = "codex-sms-token") {
+  return new Request("https://worker.test/internal/codex-sms/proposals", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+function codexSmsExecuteRequest(body, token = "codex-sms-token") {
+  return new Request("https://worker.test/internal/codex-sms/execute", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body)
   });
 }
 
@@ -803,6 +873,87 @@ test("sends one transactional SMS for a new Tally event and records the provider
   } finally { globalThis.fetch = originalFetch; }
 });
 
+test("proposes and sends one confirmed Codex marketing SMS without touching the Tally flow", async () => {
+  const originalFetch = globalThis.fetch;
+  const smsCalls = [];
+  globalThis.fetch = async (url, init) => {
+    assert.equal(String(url), "https://api.brevo.com/v3/transactionalSMS/send");
+    smsCalls.push(JSON.parse(init.body));
+    return Response.json({ messageId: 1511882900176221 }, { status: 201 });
+  };
+  try {
+    const env = environment({ CODEX_SMS_TOKEN: "codex-sms-token", BREVO_API_KEY: "brevo-test-key", BREVO_SMS_SENDER: "Belloria" });
+    const body = {
+      recipient: "06 12 34 56 78",
+      content: "Bonjour Damien, Belloria vous accompagne pour votre evenement. Repondez OUI pour recevoir notre proposition. STOP au [STOP_CODE]",
+      consent_reference: "tally-sms-opt-in-2026-08-15",
+      idempotency_key: "damien-follow-up-20260815"
+    };
+    assert.equal((await handleRequest(codexSmsProposalRequest(body, "wrong"), env)).status, 401);
+    assert.equal((await handleRequest(codexSmsProposalRequest({ ...body, content: "Bonjour Damien" }), env)).status, 400);
+
+    const proposed = await handleRequest(codexSmsProposalRequest(body), env);
+    assert.equal(proposed.status, 201);
+    const proposal = await proposed.json();
+    assert.equal(proposal.action.state, "pending");
+    assert.equal(smsCalls.length, 0);
+
+    const replayProposal = await handleRequest(codexSmsProposalRequest(body), env);
+    assert.equal(replayProposal.status, 200);
+    assert.equal((await replayProposal.json()).action.action_id, proposal.action.action_id);
+    assert.equal((await handleRequest(codexSmsProposalRequest({ ...body, content: "Bonjour Damien STOP au [STOP_CODE]" }), env)).status, 409);
+    assert.equal((await handleRequest(codexSmsExecuteRequest({ action_id: proposal.action.action_id, recipient: "33600000000" }), env)).status, 400);
+
+    const [first, second] = await Promise.all([
+      handleRequest(codexSmsExecuteRequest({ action_id: proposal.action.action_id }), env),
+      handleRequest(codexSmsExecuteRequest({ action_id: proposal.action.action_id }), env)
+    ]);
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(smsCalls.length, 1);
+    assert.deepEqual(smsCalls[0], {
+      sender: "Belloria",
+      recipient: "33612345678",
+      content: body.content,
+      type: "marketing",
+      tag: `codex-sms:${proposal.action.action_id}`,
+      unicodeEnabled: false
+    });
+    const row = env.DB.codexSmsActions.get(body.idempotency_key);
+    assert.equal(row.state, "succeeded");
+    assert.equal(row.provider_message_id, "1511882900176221");
+    assert.equal(env.DB.tally.size, 0);
+
+    const replay = await handleRequest(codexSmsExecuteRequest({ action_id: proposal.action.action_id }), env);
+    assert.equal((await replay.json()).sent, true);
+    assert.equal(smsCalls.length, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("marks an uncertain Codex SMS dispatch unknown and never retries it automatically", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    throw new Error("temporary provider failure");
+  };
+  try {
+    const env = environment({ CODEX_SMS_TOKEN: "codex-sms-token", BREVO_API_KEY: "brevo-test-key", BREVO_SMS_SENDER: "Belloria" });
+    const proposed = await handleRequest(codexSmsProposalRequest({
+      recipient: "+33612345678",
+      content: "Bonjour Damien, votre demande est bien recue. STOP au [STOP_CODE]",
+      consent_reference: "tally-sms-opt-in-2026-08-15",
+      idempotency_key: "damien-uncertain-20260815"
+    }), env);
+    const { action } = await proposed.json();
+    const first = await handleRequest(codexSmsExecuteRequest({ action_id: action.action_id }), env);
+    assert.equal((await first.json()).action.state, "unknown");
+    const replay = await handleRequest(codexSmsExecuteRequest({ action_id: action.action_id }), env);
+    assert.equal((await replay.json()).action.state, "unknown");
+    assert.equal(calls, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("records a sanitized Brevo HTTP failure without losing the Tally request", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => String(url).includes("api.telegram.org")
@@ -958,6 +1109,22 @@ test("refreshes temporary snapshots and completes a fast consultation in waitUnt
     assert.equal(env.DB.rows.get("7100").content, null);
     assert.equal(env.DB.rows.get("7100").fast_path_state, "replied");
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test("entry routes the protected Codex SMS API before OAuth", async () => {
+  let oauthCalls = 0;
+  const entrypoint = createWorkerEntrypoint({ fetch: async () => {
+    oauthCalls += 1;
+    return new Response("oauth");
+  } });
+  const response = await entrypoint.fetch(codexSmsProposalRequest({
+    recipient: "+33612345678",
+    content: "Bonjour Damien",
+    consent_reference: "tally-sms-opt-in",
+    idempotency_key: "entrypoint-probe-20260815"
+  }), environment({ CODEX_SMS_TOKEN: "codex-sms-token" }));
+  assert.equal(response.status, 400);
+  assert.equal(oauthCalls, 0);
 });
 
 test("entry forwards the execution context required by the deployed fast path", async () => {

@@ -1,5 +1,6 @@
 .env
 .env.cloud
+.env.codex-sms
 .sessions/
 .webhook-events/
 __pycache__/

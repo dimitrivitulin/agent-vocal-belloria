@@ -22,6 +22,49 @@ class D1MigrationTests(unittest.TestCase):
         )
         self.assertNotIn("sms_recipient", columns)
 
+    def test_codex_sms_actions_are_immutable_and_never_reenter_dispatch(self):
+        database = sqlite3.connect(":memory:")
+        database.executescript(
+            (ROOT / "worker" / "migrations" / "0010_codex_sms_actions.sql").read_text(encoding="utf-8")
+        )
+        database.execute(
+            "INSERT INTO codex_sms_actions "
+            "(action_id, idempotency_key, recipient, content, consent_reference, content_hash, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "action-1", "codex-sms-001", "33612345678",
+                "Bonjour STOP au [STOP_CODE]", "tally-sms-opt-in", "a" * 64,
+                "2099-01-01 00:00:00",
+            ),
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE codex_sms_actions SET content = 'other' WHERE action_id = 'action-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute(
+                "UPDATE codex_sms_actions SET state = 'succeeded', finished_at = CURRENT_TIMESTAMP "
+                "WHERE action_id = 'action-1'"
+            )
+
+        claimed = database.execute(
+            "UPDATE codex_sms_actions SET state = 'claimed', confirmed_at = CURRENT_TIMESTAMP, claimed_at = CURRENT_TIMESTAMP "
+            "WHERE action_id = 'action-1' AND state = 'pending'"
+        )
+        self.assertEqual(1, claimed.rowcount)
+        database.execute(
+            "UPDATE codex_sms_actions SET dispatch_started_at = CURRENT_TIMESTAMP "
+            "WHERE action_id = 'action-1' AND state = 'claimed'"
+        )
+        succeeded = database.execute(
+            "UPDATE codex_sms_actions SET state = 'succeeded', finished_at = CURRENT_TIMESTAMP, "
+            "provider_message_id = 'brevo-1', provider_http_status = 201 "
+            "WHERE action_id = 'action-1'"
+        )
+        self.assertEqual(1, succeeded.rowcount)
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE codex_sms_actions SET state = 'claimed' WHERE action_id = 'action-1'")
+        with self.assertRaises(sqlite3.IntegrityError):
+            database.execute("UPDATE codex_sms_actions SET provider_message_id = 'other' WHERE action_id = 'action-1'")
+
     def test_action_approval_schema_supports_atomic_confirmation(self):
         database = sqlite3.connect(":memory:")
         for migration in ("0002_telegram_commands.sql", "0003_telegram_action_approvals.sql"):

@@ -6,6 +6,8 @@ const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo";
 const FAST_SNAPSHOT_MAX_AGE_MINUTES = 120;
 const FAST_SNAPSHOT_LIMIT = 100;
 const SMS_TEXT_MAX_CHARS = 160;
+const CODEX_SMS_ACTION_EXPIRY_MAX_MINUTES = 60;
+const CODEX_SMS_CONSENT_REFERENCE_MAX_CHARS = 160;
 const EXTERNAL_ACTION_JSON_MAX_CHARS = 1400;
 const EXTERNAL_ACTION_EXPIRY_MAX_MINUTES = 60;
 
@@ -617,6 +619,179 @@ async function sendTallySms(env, submission) {
   }
 }
 
+function codexSmsAuthorizationIsValid(request, env) {
+  const supplied = request.headers.get("authorization") || "";
+  return Boolean(env.CODEX_SMS_TOKEN) && timingSafeEqual(supplied, `Bearer ${env.CODEX_SMS_TOKEN}`);
+}
+
+function codexSmsText(value) {
+  if (typeof value !== "string" || !value || value.length > SMS_TEXT_MAX_CHARS) return null;
+  if (!/^[\x20-\x7E]+$/.test(value)) return null;
+  return /\bSTOP\b.*\[STOP_CODE\]/i.test(value) ? value : null;
+}
+
+function codexSmsConsentReference(value) {
+  if (typeof value !== "string") return null;
+  const reference = value.trim();
+  return /^[\x20-\x7E]{3,160}$/.test(reference) ? reference : null;
+}
+
+function codexSmsIdempotencyKey(value) {
+  return typeof value === "string" && /^[A-Za-z0-9._-]{8,128}$/.test(value) ? value : null;
+}
+
+function codexSmsActionId(value) {
+  return typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+}
+
+function codexSmsActionView(row) {
+  return {
+    action_id: row.action_id,
+    recipient: row.recipient,
+    content: row.content,
+    consent_reference: row.consent_reference,
+    state: row.state,
+    created_at: row.created_at,
+    expires_at: row.expires_at,
+    confirmed_at: row.confirmed_at || null,
+    claimed_at: row.claimed_at || null,
+    dispatch_started_at: row.dispatch_started_at || null,
+    result: row.finished_at ? {
+      finished_at: row.finished_at,
+      provider_message_id: row.provider_message_id || null,
+      provider_http_status: row.provider_http_status || null,
+      provider_error_code: row.provider_error_code || null
+    } : null
+  };
+}
+
+async function readCodexSmsAction(db, actionId) {
+  const result = await db.prepare("SELECT * FROM codex_sms_actions WHERE action_id = ?").bind(actionId).all();
+  return result.results?.[0] || null;
+}
+
+async function expireCodexSmsAction(db, actionId) {
+  await db.prepare(
+    "UPDATE codex_sms_actions SET state = 'expired' WHERE action_id = ? AND state = 'pending' AND expires_at <= CURRENT_TIMESTAMP"
+  ).bind(actionId).run();
+}
+
+async function createCodexSmsAction(env, body) {
+  const recipient = normalizeFrenchMobile(body.recipient);
+  const content = codexSmsText(body.content);
+  const consentReference = codexSmsConsentReference(body.consent_reference);
+  const idempotencyKey = codexSmsIdempotencyKey(body.idempotency_key);
+  const minutes = body.expires_in_minutes === undefined ? 30 : body.expires_in_minutes;
+  if (!recipient) throw Object.assign(new Error("recipient must be a French mobile number"), { status: 400, code: "invalid_recipient" });
+  if (!content) throw Object.assign(new Error("content must be ASCII, at most 160 characters, and include STOP with [STOP_CODE]"), { status: 400, code: "invalid_content" });
+  if (!consentReference) throw Object.assign(new Error(`consent_reference must contain 3 to ${CODEX_SMS_CONSENT_REFERENCE_MAX_CHARS} printable ASCII characters`), { status: 400, code: "invalid_consent_reference" });
+  if (!idempotencyKey) throw Object.assign(new Error("idempotency_key must contain 8 to 128 safe characters"), { status: 400, code: "invalid_idempotency_key" });
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > CODEX_SMS_ACTION_EXPIRY_MAX_MINUTES) {
+    throw Object.assign(new Error(`expires_in_minutes must be an integer from 1 to ${CODEX_SMS_ACTION_EXPIRY_MAX_MINUTES}`), { status: 400, code: "invalid_expiry" });
+  }
+  const contentHash = await sha256Hex(`${recipient}\n${content}\n${consentReference}`);
+  const actionId = crypto.randomUUID();
+  const inserted = await env.DB.prepare(
+    "INSERT INTO codex_sms_actions (action_id, idempotency_key, recipient, content, consent_reference, content_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?)) ON CONFLICT(idempotency_key) DO NOTHING"
+  ).bind(actionId, idempotencyKey, recipient, content, consentReference, contentHash, `+${minutes} minutes`).run();
+  if (Number(inserted.meta?.changes || 0) === 1) {
+    return { created: true, action: codexSmsActionView(await readCodexSmsAction(env.DB, actionId)) };
+  }
+  const existing = (await env.DB.prepare("SELECT * FROM codex_sms_actions WHERE idempotency_key = ?").bind(idempotencyKey).all()).results?.[0];
+  if (!existing || existing.content_hash !== contentHash) throw Object.assign(new Error("idempotency_conflict"), { status: 409, code: "idempotency_conflict" });
+  await expireCodexSmsAction(env.DB, existing.action_id);
+  return { created: false, action: codexSmsActionView(await readCodexSmsAction(env.DB, existing.action_id)) };
+}
+
+async function recordCodexSmsActionResult(db, actionId, state, { messageId = null, httpStatus = null, errorCode = null } = {}) {
+  const result = await db.prepare(
+    "UPDATE codex_sms_actions SET state = ?, finished_at = CURRENT_TIMESTAMP, provider_message_id = ?, provider_http_status = ?, provider_error_code = ? WHERE action_id = ? AND state = 'claimed'"
+  ).bind(state, messageId, httpStatus, errorCode, actionId).run();
+  return Number(result.meta?.changes || 0) === 1;
+}
+
+async function executeCodexSmsAction(env, suppliedActionId) {
+  const actionId = codexSmsActionId(suppliedActionId);
+  if (!actionId) throw Object.assign(new Error("action_id must be a UUID"), { status: 400, code: "invalid_action_id" });
+  await expireCodexSmsAction(env.DB, actionId);
+  const beforeClaim = await readCodexSmsAction(env.DB, actionId);
+  if (!beforeClaim) return { found: false, action_id: suppliedActionId };
+  if (beforeClaim.state !== "pending") return { found: true, action: codexSmsActionView(beforeClaim), sent: beforeClaim.state === "succeeded" };
+  if (!env.BREVO_API_KEY || !env.BREVO_SMS_SENDER) throw Object.assign(new Error("SMS provider is not configured"), { status: 503, code: "sms_not_configured" });
+
+  const claimed = await env.DB.prepare(
+    "UPDATE codex_sms_actions SET state = 'claimed', confirmed_at = CURRENT_TIMESTAMP, claimed_at = CURRENT_TIMESTAMP WHERE action_id = ? AND state = 'pending' AND expires_at > CURRENT_TIMESTAMP"
+  ).bind(actionId).run();
+  if (Number(claimed.meta?.changes || 0) !== 1) {
+    const current = await readCodexSmsAction(env.DB, actionId);
+    return { found: Boolean(current), action: current ? codexSmsActionView(current) : null, sent: current?.state === "succeeded" };
+  }
+  const started = await env.DB.prepare(
+    "UPDATE codex_sms_actions SET dispatch_started_at = CURRENT_TIMESTAMP WHERE action_id = ? AND state = 'claimed' AND dispatch_started_at IS NULL"
+  ).bind(actionId).run();
+  if (Number(started.meta?.changes || 0) !== 1) {
+    return { found: true, action: codexSmsActionView(await readCodexSmsAction(env.DB, actionId)), sent: false };
+  }
+
+  try {
+    const response = await fetch("https://api.brevo.com/v3/transactionalSMS/send", {
+      method: "POST",
+      headers: { accept: "application/json", "api-key": env.BREVO_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({
+        sender: env.BREVO_SMS_SENDER,
+        recipient: beforeClaim.recipient,
+        content: beforeClaim.content,
+        type: "marketing",
+        tag: `codex-sms:${actionId}`,
+        unicodeEnabled: false
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok && payload.messageId) {
+      await recordCodexSmsActionResult(env.DB, actionId, "succeeded", { messageId: String(payload.messageId), httpStatus: response.status });
+    } else if (response.status >= 500 || response.status === 429 || response.ok) {
+      await recordCodexSmsActionResult(env.DB, actionId, "unknown", { httpStatus: response.status, errorCode: `brevo_http_${response.status}` });
+    } else {
+      await recordCodexSmsActionResult(env.DB, actionId, "failed", { httpStatus: response.status, errorCode: `brevo_http_${response.status}` });
+    }
+  } catch (error) {
+    await recordCodexSmsActionResult(env.DB, actionId, "unknown", { errorCode: cleanErrorCode(error, "codex_sms_dispatch_unknown") });
+  }
+  const action = await readCodexSmsAction(env.DB, actionId);
+  return { found: true, action: codexSmsActionView(action), sent: action?.state === "succeeded" };
+}
+
+async function codexSmsApi(request, env, path) {
+  if (!codexSmsAuthorizationIsValid(request, env)) return json({ error: "unauthorized" }, 401);
+  if (path === "/internal/codex-sms/proposals" && request.method === "POST") {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
+    const allowed = ["recipient", "content", "consent_reference", "idempotency_key", "expires_in_minutes"];
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some((key) => !allowed.includes(key))) return json({ error: "invalid request" }, 400);
+    try {
+      const proposal = await createCodexSmsAction(env, body);
+      return json(proposal, proposal.created ? 201 : 200);
+    } catch (error) { return json({ error: error.code || "proposal_failed" }, error.status || 500); }
+  }
+  if (path === "/internal/codex-sms/execute" && request.method === "POST") {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 1 || !("action_id" in body)) return json({ error: "invalid request" }, 400);
+    try {
+      const result = await executeCodexSmsAction(env, body.action_id);
+      return json(result, result.found ? 200 : 404);
+    } catch (error) { return json({ error: error.code || "execution_failed" }, error.status || 500); }
+  }
+  const match = /^\/internal\/codex-sms\/actions\/([0-9a-f-]{36})$/i.exec(path);
+  if (match && request.method === "GET") {
+    const actionId = match[1];
+    await expireCodexSmsAction(env.DB, actionId);
+    const action = await readCodexSmsAction(env.DB, actionId);
+    return action ? json({ found: true, action: codexSmsActionView(action) }) : json({ found: false, action_id: actionId }, 404);
+  }
+  return json({ error: "not found" }, 404);
+}
+
 async function brevoSmsWebhook(request, env) {
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
   const authorization = request.headers.get("authorization") || "";
@@ -1101,6 +1276,7 @@ async function mcp(request, env) {
 export async function handleRequest(request, env, context) {
   const path = new URL(request.url).pathname;
   if (path.startsWith("/gpt-actions/")) return gptActions(request, env, { proposeGmailExternalAction, proposeNotionExternalAction, claimExternalAction });
+  if (path.startsWith("/internal/codex-sms")) return codexSmsApi(request, env, path);
   if (path === "/health" && request.method === "GET") return json({ status: "ok", channel: "telegram" });
   if (path === "/webhooks/telegram") return telegramWebhook(request, env, context);
   if (path === "/webhooks/tally") return tallyWebhook(request, env, context);
@@ -1112,7 +1288,7 @@ export function createWorkerEntrypoint(oauthProvider) {
   return {
     fetch(request, env, context) {
       const path = new URL(request.url).pathname;
-      if (path.startsWith("/gpt-actions/") || path === "/health" || path === "/webhooks/telegram" || path === "/webhooks/tally" || path === "/webhooks/brevo-sms") {
+      if (path.startsWith("/gpt-actions/") || path.startsWith("/internal/codex-sms") || path === "/health" || path === "/webhooks/telegram" || path === "/webhooks/tally" || path === "/webhooks/brevo-sms") {
         return handleRequest(request, env, context);
       }
       return oauthProvider.fetch(request, env, context);

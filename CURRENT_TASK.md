@@ -1,53 +1,48 @@
-# BELL-048 — Intégration Notion au registre d’actions
+# BELL-049 — Envoi SMS interne depuis Codex
 
 Statut: completed
-Branche: `codex/bell-048-notion-action-registry`
-Dernière mise à jour: 2026-08-12
+Branche: `codex/bell-049-internal-sms`
+Dernière mise à jour: 2026-08-15
 
 ## Objectif
 
-Raccorder les créations, mises à jour et archivages Notion des Actions GPT au registre BELL-046, afin qu’aucune mutation ne repose uniquement sur `confirmed: true`.
+Permettre à Codex de préparer puis d'envoyer un SMS commercial ponctuel via le Worker et Brevo, après validation explicite dans la conversation, sans réutiliser le flux transactionnel automatique Tally.
 
 ## Contexte autorisé
 
-- Domaine : code local Worker, migration D1, contrat OpenAPI et tests Worker/D1.
-- Fichiers initiaux : routes Actions GPT, registre `external_actions`, migrations D1 et tests associés.
-- Skill requis : aucun au démarrage.
-- MCP ou connecteur requis : configuration Cloudflare et CLI Wrangler pour appliquer la migration D1 et déployer ; les tests doublent Notion et Telegram. Un accès Notion en lecture ne sera envisagé que pour une validation ultérieure nécessaire.
-- Hors périmètre : BELL-047.2/047.3, OAuth Google, envoi Gmail, modifications réelles du CRM Notion, Brevo, Tally, WAHA/Meta et refactor général.
+- Domaine : Worker Cloudflare, D1, Brevo et outil local interne.
+- Fichiers initiaux : route Worker, registre `external_actions`, migrations D1, tests Worker/D1, contrat OpenAPI, configuration Wrangler et scripts npm proches.
+- Skill requis : Cloudflare.
+- MCP ou connecteur requis : Cloudflare/Wrangler pour la migration et le déploiement ; documentation officielle Brevo uniquement pour vérifier le champ SMS marketing. Aucun accès Gmail, Notion, Tally ou Brevo direct.
+- Hors périmètre : modification du flux SMS transactionnel Tally, envoi réel pendant les tests, CRM, email, Telegram, WhatsApp/Meta et refactor général.
 
 ## Critères de sortie
 
-- Les mutations Notion produisent une proposition durable issue d’une commande Telegram, approuvée avant exécution.
-- L’exécution relit le contenu immuable du registre, le réserve atomiquement et persiste un résultat terminal sans rejeu ambigu.
-- Les tests Worker/D1, le contrôle du diff et l’examen de périmètre réussissent.
+- Un outil local Codex permet de créer une proposition SMS marketing avec consentement déclaré, puis de l'exécuter explicitement.
+- Le Worker protège cette voie par un secret distinct, conserve l'action et son résultat de façon idempotente, puis utilise Brevo avec le type marketing.
+- Le code, les tests, la migration et le contrat sont validés ; aucun client réel n'est contacté pendant ce lot.
 
 ## Garde de sécurité
 
-- L’autorisation explicite du 2026-08-12 couvre l’application de la migration D1 et le déploiement Worker ; aucune mutation CRM Notion réelle ne sera exécutée.
-- Les contenus de mutation validés restent immuables entre leur présentation Telegram et leur exécution.
-
-## État initial
-
-- BELL-046 fournit le registre `external_actions`, l’approbation Telegram et le claim atomique.
-- BELL-047.1 applique déjà ce modèle à l’envoi Gmail ; les mutations Notion restent directes sur `confirmed: true`.
-- BELL-039 a une connexion Notion créée, mais sa source CRM n’est pas encore exposée par l’API pour les créations ; ce lot doit conserver un comportement sûr en cas d’indisponibilité fournisseur.
-
-## Prochaine action
-
-- Reprendre le prochain lot explicitement prioritaire dans `docs/TASKS.md`.
+- La validation humaine du texte, du destinataire et du consentement précède l'exécution ; l'outil exige une confirmation explicite.
+- Les secrets restent dans les secrets Worker et dans une configuration locale ignorée par Git.
+- Une erreur ou un résultat fournisseur incertain ne doit jamais déclencher un renvoi automatique.
 
 ## Résultat
 
-- Les routes Notion `POST`, `PATCH` et `DELETE /gpt-actions/notion/page` créent désormais des propositions immuables liées à une commande Telegram persistée ; `confirmed: true` n’est plus accepté.
-- `POST /gpt-actions/notion/execute` ne reçoit que `action_id`, relit la cible et le contenu depuis D1, réserve le dispatch et conserve les états `succeeded`, `failed` ou `unknown` sans rejeu ambigu.
-- La migration `0009_notion_external_action_execution.sql` ajoute la ressource fournisseur Notion au résultat immuable et étend les transitions D1 aux succès Notion.
+- La route interne protégée `/internal/codex-sms` permet de proposer, relire, puis exécuter un SMS marketing Brevo depuis Codex avec le secret Worker distinct `CODEX_SMS_TOKEN`.
+- Chaque action garde son texte, destinataire, référence de consentement et résultat ; les rejoues sont idempotents et tout résultat ambigu reste `unknown` sans nouvel envoi.
+- Le script `npm run sms:codex -- propose|send|status` est prêt ; `send` exige `--confirm` après validation humaine du message exact.
+- La migration D1 `0010_codex_sms_actions.sql` est appliquée en production et le Worker est déployé (version `d5e5f1f4-6536-45e7-951d-6c5df4070a7e`).
+- Aucun SMS client ni aucune proposition réelle n'ont été envoyés pendant le lot.
 
 ## Validation
 
-- `npm.cmd run test:worker` : 47 tests réussis.
-- Runtime Python fourni par Codex : 79 tests réussis, dont les migrations D1.
-- Aucun appel Notion réel ni aucune mutation CRM effectués.
-- Authentification OAuth Wrangler rétablie le 2026-08-12 ; migration distante `0009_notion_external_action_execution.sql` appliquée sur D1 `belloria-whatsapp` puis confirmée sans migration restante.
-- Worker `belloria-assistant` déployé le 2026-08-12 (version `88e203a2-b4c7-463b-b22d-218646aabd27`).
-- Après déploiement : `npm.cmd run test:worker` (47 tests) et `python -m unittest discover -s tests` (79 tests) réussis ; `git diff --check` réussit.
+- `npm.cmd run test:worker` : 50 tests réussis.
+- Runtime Python Codex : 80 tests de migrations réussis.
+- `npm.cmd run sms:codex -- help` réussi ; sonde distante volontairement invalide rejetée avec `invalid_content`, sans appel Brevo.
+- `git diff --check` réussi.
+
+## Prochaine action
+
+- Lors d'une relance, présenter d'abord le SMS exact, vérifier le consentement, puis utiliser la commande `propose` et attendre l'accord avant `send --confirm`.

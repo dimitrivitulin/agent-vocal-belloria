@@ -56,6 +56,11 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [x] **BELL-049 — Envoi SMS interne depuis Codex** (`completed`)
+  Ajouter une voie interne protégée pour proposer puis envoyer, après validation humaine, un SMS commercial Brevo depuis Codex sans détourner l’accusé transactionnel Tally.
+  **Terminé lorsque** le parcours interne est authentifié, idempotent, journalisé, couvert par les tests et déployé sans envoyer de message client pendant le lot.
+  Route interne protégée, migration D1 `0010`, commande Codex et déploiement Worker livrés ; aucune action SMS réelle n’a été créée pendant le lot.
+
 - [x] **BELL-046 — Registre d’actions externes et approbation durable** (`completed`)
   Créer le registre D1 immuable, la déduplication depuis une intention Telegram persistée, la présentation et la confirmation Telegram, le claim atomique et la consultation d'état, sans adaptateur fournisseur.
   **Terminé lorsque** une action passe de `pending` à `approved` puis `claimed`, expire sans approbation et conserve la preuve locale du contenu présenté et de la confirmation.
