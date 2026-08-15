@@ -56,6 +56,11 @@ Ordre recommandé : `BELL-027` → `BELL-028` → `BELL-029` → `BELL-030` → 
 
 ## Fondations existantes
 
+- [x] **BELL-050 — Envoi SMS de suivi du dernier formulaire Tally** (`completed`)
+  Exécuter une seule fois le SMS de suivi condensé explicitement validé pour le dernier contact Tally, par la voie interne BELL-049.
+  **Terminé lorsque** l'action est tracée, le fournisseur l'accepte et aucun renvoi automatique n'est engagé.
+  Action créée après vérification du destinataire et du texte ; Brevo a accepté l'envoi et l'état terminal est `succeeded`.
+
 - [x] **BELL-049 — Envoi SMS interne depuis Codex** (`completed`)
   Ajouter une voie interne protégée pour proposer puis envoyer, après validation humaine, un SMS commercial Brevo depuis Codex sans détourner l’accusé transactionnel Tally.
   **Terminé lorsque** le parcours interne est authentifié, idempotent, journalisé, couvert par les tests et déployé sans envoyer de message client pendant le lot.
